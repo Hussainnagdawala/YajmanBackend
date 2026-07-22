@@ -15,6 +15,7 @@ const isPgError = (err: unknown): err is PgError =>
 
 const PG_UNIQUE_VIOLATION = "23505";
 const PG_FOREIGN_KEY_VIOLATION = "23503";
+const PG_CHECK_VIOLATION = "23514";
 const PG_INVALID_TEXT_REPRESENTATION = "22P02";
 const PG_STRING_DATA_RIGHT_TRUNCATION = "22001";
 
@@ -33,6 +34,8 @@ export const errorHandler = (err: unknown, req: Request, res: Response, _next: N
         return error(res, "A record with this value already exists", 409, "CONFLICT");
       case PG_FOREIGN_KEY_VIOLATION:
         return error(res, "Referenced record does not exist or is still in use", 409, "CONFLICT");
+      case PG_CHECK_VIOLATION:
+        return error(res, "Value violates a database constraint", 400, "VALIDATION_ERROR");
       case PG_INVALID_TEXT_REPRESENTATION:
         return error(res, "Invalid value format", 400, "VALIDATION_ERROR");
       case PG_STRING_DATA_RIGHT_TRUNCATION:

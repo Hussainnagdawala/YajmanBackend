@@ -1,6 +1,6 @@
 import { pool } from "../config/database";
 
-const SLUGGABLE_TABLES = ["categories", "types", "tags", "blogs", "services", "temples"] as const;
+const SLUGGABLE_TABLES = ["categories", "types", "tags", "blogs", "services", "temples", "aayojan_events"] as const;
 type SluggableTable = (typeof SLUGGABLE_TABLES)[number];
 
 export const slugify = (text: string): string =>

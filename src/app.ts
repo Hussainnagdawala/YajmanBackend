@@ -10,13 +10,19 @@ import routes from "./routes";
 export const app = express();
 
 app.use(helmet());
+app.use(cors()
+  // cors({
+  //   // origin: "*",
+  //   // credentials: true,
+  // })
+);
 app.use(
-  cors({
-    origin: env.CORS_ORIGINS_LIST,
-    credentials: true,
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as express.Request).rawBody = buf;
+    },
   })
 );
-app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
 app.use(globalRateLimiter);

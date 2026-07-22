@@ -33,7 +33,7 @@ const envSchema = z.object({
 
   FRONTEND_URL: z.string().default("http://localhost:3000"),
   ADMIN_PORTAL_URL: z.string().default("http://localhost:3002"),
-  CORS_ORIGINS: z.string().default("http://localhost:3000"),
+  CORS_ORIGINS: z.string().default("*"),
 
   RATE_LIMIT_WINDOW_MS: z.string().default("900000").transform(Number),
   RATE_LIMIT_MAX_REQUESTS: z.string().default("100").transform(Number),

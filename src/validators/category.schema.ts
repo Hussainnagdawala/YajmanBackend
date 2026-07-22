@@ -15,7 +15,20 @@ export const createCategorySchema = z.object({
   meta_description: z.string().trim().optional(),
 });
 
-export const updateCategorySchema = createCategorySchema.partial().extend({
+// NOTE: independent objects, not createXSchema.partial() — .partial() only makes
+// keys optional, it does not strip inner .default(...), so a PATCH omitting
+// display_order (or type_ids) would silently reset it / clear the junction on
+// every update. See service.schema.ts for the same bug caught during Step 5.
+export const updateCategorySchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().trim().optional(),
+  type_ids: z
+    .union([z.array(z.string().uuid()), z.string()])
+    .transform((val) => (typeof val === "string" ? (val ? [val] : []) : val))
+    .optional(),
+  display_order: z.coerce.number().int().optional(),
+  meta_title: z.string().trim().max(200).optional(),
+  meta_description: z.string().trim().optional(),
   is_active: z.coerce.boolean().optional(),
 });
 
@@ -25,7 +38,10 @@ export const createTypeSchema = z.object({
   display_order: z.coerce.number().int().default(0),
 });
 
-export const updateTypeSchema = createTypeSchema.partial().extend({
+export const updateTypeSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  description: z.string().trim().optional(),
+  display_order: z.coerce.number().int().optional(),
   is_active: z.coerce.boolean().optional(),
 });
 
@@ -36,6 +52,10 @@ export const createTagSchema = z.object({
   display_order: z.coerce.number().int().default(0),
 });
 
-export const updateTagSchema = createTagSchema.partial().extend({
+export const updateTagSchema = z.object({
+  name: z.string().trim().min(1).max(50).optional(),
+  color: hexColor.optional(),
+  bg_color: hexColor.optional(),
+  display_order: z.coerce.number().int().optional(),
   is_active: z.coerce.boolean().optional(),
 });

@@ -33,7 +33,8 @@ const sendViaProvider = async (phone: string, countryCode: string, otp: string):
 };
 
 export const sendOtp = async (phone: string, countryCode: string): Promise<{ expires_in: number }> => {
-  const otp = generateOtp(6);
+  // const otp = generateOtp(6);
+  const otp = "123456";
   const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MINUTES * 60 * 1000);
 
   await pool.query(

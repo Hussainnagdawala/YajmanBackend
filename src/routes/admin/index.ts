@@ -3,6 +3,19 @@ import userRoutes from "./user.routes";
 import categoryRoutes from "./category.routes";
 import typeRoutes from "./type.routes";
 import tagRoutes from "./tag.routes";
+import serviceRoutes from "./service.routes";
+import templeRoutes from "./temple.routes";
+import bannerRoutes from "./banner.routes";
+import popularRoutes from "./popular.routes";
+import testimonialRoutes from "./testimonial.routes";
+import recommendedRoutes from "./recommended.routes";
+import blogRoutes from "./blog.routes";
+import blogCategoryRoutes from "./blog-category.routes";
+import blogAuthorRoutes from "./blog-author.routes";
+import aayojanRoutes from "./aayojan.routes";
+import couponRoutes from "./coupon.routes";
+import reviewRoutes from "./review.routes";
+import invoiceRoutes from "./invoice.routes";
 
 const router = Router();
 
@@ -10,5 +23,18 @@ router.use("/users", userRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/types", typeRoutes);
 router.use("/tags", tagRoutes);
+router.use("/services", serviceRoutes);
+router.use("/temples", templeRoutes);
+router.use("/banners", bannerRoutes);
+router.use("/popular-searches", popularRoutes);
+router.use("/testimonials", testimonialRoutes);
+router.use("/recommended-services", recommendedRoutes);
+router.use("/blogs", blogRoutes);
+router.use("/blog-categories", blogCategoryRoutes);
+router.use("/blog-authors", blogAuthorRoutes);
+router.use("/aayojan", aayojanRoutes);
+router.use("/coupons", couponRoutes);
+router.use("/reviews", reviewRoutes);
+router.use("/invoices", invoiceRoutes);
 
 export default router;

@@ -19,7 +19,16 @@ export const createUserSchema = z.object({
   email: z.string().email().max(150).optional(),
 });
 
-export const updateUserSchema = createUserSchema.partial();
+// Independent object, not createUserSchema.partial() — .partial() would leave
+// role's .default("pandit") in place, silently resetting an admin/customer's
+// role to "pandit" on any PATCH that omits it. See service.schema.ts for the
+// same bug class caught during Step 5.
+export const updateUserSchema = z.object({
+  phone: z.string().regex(/^[6-9]\d{9}$/).optional(),
+  name: z.string().trim().min(1).max(100).optional(),
+  role: z.enum(["pandit", "admin", "customer"]).optional(),
+  email: z.string().email().max(150).optional(),
+});
 
 export const updateUserStatusSchema = z.object({
   status: z.enum(["active", "inactive", "suspended"]),
