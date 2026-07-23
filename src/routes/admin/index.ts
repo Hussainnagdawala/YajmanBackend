@@ -16,6 +16,10 @@ import aayojanRoutes from "./aayojan.routes";
 import couponRoutes from "./coupon.routes";
 import reviewRoutes from "./review.routes";
 import invoiceRoutes from "./invoice.routes";
+import panditAssignmentRoutes from "./pandit.routes";
+import contactRoutes from "./contact.routes";
+import dashboardRoutes from "./dashboard.routes";
+import orderRoutes from "./order.routes";
 
 const router = Router();
 
@@ -36,5 +40,9 @@ router.use("/aayojan", aayojanRoutes);
 router.use("/coupons", couponRoutes);
 router.use("/reviews", reviewRoutes);
 router.use("/invoices", invoiceRoutes);
+router.use("/pandit-assignments", panditAssignmentRoutes);
+router.use("/contact-entries", contactRoutes);
+router.use("/dashboard", dashboardRoutes);
+router.use("/orders", orderRoutes);
 
 export default router;

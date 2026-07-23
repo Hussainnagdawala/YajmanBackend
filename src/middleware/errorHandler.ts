@@ -25,7 +25,11 @@ export const errorHandler = (err: unknown, req: Request, res: Response, _next: N
   }
 
   if (err instanceof ZodError) {
-    return error(res, "Validation failed", 422, "VALIDATION_ERROR");
+    const details = err.issues.map((issue) => ({
+      field: issue.path.join(".") || "(root)",
+      message: issue.message,
+    }));
+    return error(res, "Validation failed", 422, "VALIDATION_ERROR", details);
   }
 
   if (isPgError(err)) {

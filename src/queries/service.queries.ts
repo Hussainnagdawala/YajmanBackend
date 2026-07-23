@@ -97,6 +97,42 @@ export const findServiceBySlug = `
   WHERE s.slug = $1 AND s.is_active = true AND s.status = 'published'
 `;
 
+export const findServiceByIdDetail = `
+  SELECT s.*,
+    c.name AS category_name, c.slug AS category_slug,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', si.id, 'url', si.image_url, 'alt_text', si.alt_text, 'display_order', si.display_order) ORDER BY si.display_order)
+       FROM service_images si WHERE si.service_id = s.id), '[]'
+    ) AS images,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', t.id, 'name', t.name, 'slug', t.slug))
+       FROM service_types st JOIN types t ON t.id = st.type_id WHERE st.service_id = s.id), '[]'
+    ) AS types,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', tg.id, 'name', tg.name, 'color', tg.color, 'bg_color', tg.bg_color))
+       FROM service_tags stg JOIN tags tg ON tg.id = stg.tag_id WHERE stg.service_id = s.id), '[]'
+    ) AS tags,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', tm.id, 'name', tm.name, 'slug', tm.slug, 'city', tm.city, 'image_url', tm.image_url))
+       FROM service_temples stt JOIN temples tm ON tm.id = stt.temple_id WHERE stt.service_id = s.id), '[]'
+    ) AS temples,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', kf.id, 'title', kf.title, 'description', kf.description, 'icon_url', kf.icon_url) ORDER BY kf.display_order)
+       FROM service_key_features kf WHERE kf.service_id = s.id), '[]'
+    ) AS key_features,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', p.id, 'title', p.title, 'description', p.description, 'items', p.items, 'price', p.price) ORDER BY p.display_order)
+       FROM service_packages p WHERE p.service_id = s.id), '[]'
+    ) AS packages,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', f.id, 'question', f.question, 'answer', f.answer) ORDER BY f.display_order)
+       FROM service_faqs f WHERE f.service_id = s.id AND f.is_active = true), '[]'
+    ) AS faqs
+  FROM services s
+  JOIN categories c ON c.id = s.category_id
+  WHERE s.id = $1
+`;
+
 // ─── Junctions: types / tags / temples ──────────────────────
 
 export const clearServiceTypes = `DELETE FROM service_types WHERE service_id = $1`;

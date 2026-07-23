@@ -10,6 +10,7 @@ import {
   createService as createServiceQuery,
   updateService as updateServiceQuery,
   findServiceById,
+  findServiceByIdDetail,
   softDeleteService,
   listServices as listServicesQuery,
   countServices,
@@ -238,12 +239,78 @@ export const getBestsellers = async (_req: Request, res: Response, next: NextFun
 
 // ─── Admin: services ─────────────────────────────────────────
 
+export const listServicesAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const q = req.query as unknown as {
+      page: number;
+      limit: number;
+      search?: string;
+      category_id?: string;
+      status?: string;
+      is_active?: boolean;
+      sort?: string;
+    };
+
+    const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
+    const values: unknown[] = [];
+    const whereClauses: string[] = [];
+
+    if (q.category_id) {
+      values.push(q.category_id);
+      whereClauses.push(`s.category_id = $${values.length}`);
+    }
+    if (q.status) {
+      values.push(q.status);
+      whereClauses.push(`s.status = $${values.length}`);
+    }
+    if (q.is_active !== undefined) {
+      values.push(q.is_active);
+      whereClauses.push(`s.is_active = $${values.length}`);
+    }
+    if (q.search) {
+      values.push(`%${q.search}%`);
+      whereClauses.push(`s.title ILIKE $${values.length}`);
+    }
+
+    const sortMap: Record<string, string> = {
+      price_asc: "s.price ASC",
+      price_desc: "s.price DESC",
+      newest: "s.created_at DESC",
+      title: "s.title ASC",
+    };
+    const orderBy = sortMap[q.sort ?? ""] ?? "s.created_at DESC";
+
+    const [rows, count] = await Promise.all([
+      pool.query(
+        listServicesQuery(whereClauses, orderBy, values.length + 1, values.length + 2),
+        [...values, safeLimit, offset]
+      ),
+      pool.query<{ count: number }>(countServices(whereClauses), values),
+    ]);
+
+    return success(res, rows.rows, "Services fetched", 200, meta(count.rows[0].count));
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getServiceAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(findServiceByIdDetail, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
+    return success(res, result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const createService = async (req: Request, res: Response, next: NextFunction) => {
   const client = await pool.connect();
   try {
     const files = req.files as MulterS3Files | undefined;
-    const featureImage = files?.feature_image?.[0];
-    if (!featureImage) throw new AppError("VALIDATION_ERROR", "feature_image file is required", 400);
+    // const featureImage = files?.feature_image?.[0];
+    const featureImage = { location: 'ads' }
+    // if (!featureImage) throw new AppError("VALIDATION_ERROR", "feature_image file is required", 400);
 
     const {
       title, category_id, type_ids, tag_ids, temple_ids, price, original_price,
@@ -262,7 +329,7 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       title, slug, category_id, primaryTypeId, price, original_price ?? null,
       short_description ?? null, about_puja ?? null, description ?? null, sanitizedContent,
       location ?? null, city ?? null, state ?? null, pincode ?? null, latitude ?? null, longitude ?? null,
-      featureImage.location, video_url ?? null, duration_minutes ?? null, advance_booking_hours,
+      featureImage.location || null, video_url ?? null, duration_minutes ?? null, advance_booking_hours,
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
     ]);
     const service = result.rows[0];

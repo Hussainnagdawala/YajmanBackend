@@ -24,9 +24,14 @@ export const success = <T>(
   });
 };
 
-export const error = (res: Response, message: string, status = 400, code?: string) => {
+export interface FieldError {
+  field: string;
+  message: string;
+}
+
+export const error = (res: Response, message: string, status = 400, code?: string, details?: FieldError[]) => {
   return res.status(status).json({
     success: false,
-    error: { message, status, code },
+    error: { message, status, code, ...(details && details.length > 0 && { details }) },
   });
 };

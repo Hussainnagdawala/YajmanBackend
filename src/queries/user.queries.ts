@@ -37,3 +37,5 @@ export const countUsers = (whereClauses: string[]) => `
   SELECT COUNT(*)::int AS count FROM users
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
 `;
+
+export const listAdminUserIds = `SELECT id FROM users WHERE role = 'admin' AND status = 'active'`;

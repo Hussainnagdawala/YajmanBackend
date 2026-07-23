@@ -127,6 +127,13 @@ export const listServicesQuerySchema = paginationSchema.extend({
   city: z.string().optional(),
 });
 
+export const listServicesAdminQuerySchema = paginationSchema.extend({
+  category_id: z.string().uuid().optional(),
+  status: z.enum(["draft", "published", "archived"]).optional(),
+  is_active: z.coerce.boolean().optional(),
+  sort: z.enum(["price_asc", "price_desc", "newest", "title"]).optional(),
+});
+
 export const createTempleSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().optional(),

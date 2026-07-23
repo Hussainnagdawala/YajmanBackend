@@ -14,6 +14,8 @@ import aayojanRoutes from "./aayojan.routes";
 import couponRoutes from "./coupon.routes";
 import checkoutRoutes from "./checkout.routes";
 import bookingRoutes from "./booking.routes";
+import panditRoutes from "./pandit.routes";
+import contactRoutes from "./contact.routes";
 
 const router = Router();
 
@@ -30,5 +32,7 @@ router.use("/aayojan", aayojanRoutes);
 router.use("/coupons", authenticate, couponRoutes);
 router.use("/checkout", checkoutRoutes);
 router.use("/bookings", authenticate, bookingRoutes);
+router.use("/pandit", authenticate, panditRoutes);
+router.use("/contact", contactRoutes);
 
 export default router;

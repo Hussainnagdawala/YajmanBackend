@@ -2,7 +2,11 @@ import { Router, Request, Response, NextFunction } from "express";
 import * as serviceController from "../../controllers/service.controller";
 import { validate } from "../../middleware/validate";
 import { uploadFields, uploadArray } from "../../middleware/upload";
-import { createServiceSchema, updateServiceSchema } from "../../validators/service.schema";
+import {
+  createServiceSchema,
+  updateServiceSchema,
+  listServicesAdminQuerySchema,
+} from "../../validators/service.schema";
 
 const router = Router();
 
@@ -16,6 +20,8 @@ const serviceUploads = uploadFields([
   { name: "images", maxCount: 20 },
 ]);
 
+router.get("/", validate(listServicesAdminQuerySchema, "query"), serviceController.listServicesAdmin);
+router.get("/:id", serviceController.getServiceAdmin);
 router.post("/", setUploadFolder, serviceUploads, validate(createServiceSchema), serviceController.createService);
 router.patch("/:id", setUploadFolder, serviceUploads, validate(updateServiceSchema), serviceController.updateService);
 router.delete("/:id", serviceController.deleteService);
