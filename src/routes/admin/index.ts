@@ -20,6 +20,8 @@ import panditAssignmentRoutes from "./pandit.routes";
 import contactRoutes from "./contact.routes";
 import dashboardRoutes from "./dashboard.routes";
 import orderRoutes from "./order.routes";
+import notificationRoutes from "./notification.routes";
+import settingsRoutes from "./settings.routes";
 
 const router = Router();
 
@@ -44,5 +46,7 @@ router.use("/pandit-assignments", panditAssignmentRoutes);
 router.use("/contact-entries", contactRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/orders", orderRoutes);
+router.use("/notifications", notificationRoutes);
+router.use("/app-settings", settingsRoutes);
 
 export default router;

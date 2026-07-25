@@ -37,6 +37,12 @@ const envSchema = z.object({
 
   RATE_LIMIT_WINDOW_MS: z.string().default("900000").transform(Number),
   RATE_LIMIT_MAX_REQUESTS: z.string().default("100").transform(Number),
+
+  // Firebase / FCM — optional in local/dev; push no-ops when unset
+  FIREBASE_PROJECT_ID: z.string().optional().default(""),
+  FIREBASE_CLIENT_EMAIL: z.string().optional().default(""),
+  FIREBASE_PRIVATE_KEY: z.string().optional().default(""),
+  FIREBASE_SERVICE_ACCOUNT_PATH: z.string().optional().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

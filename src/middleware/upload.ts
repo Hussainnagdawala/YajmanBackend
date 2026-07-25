@@ -1,5 +1,6 @@
 import multer from "multer";
 import multerS3 from "multer-s3";
+import { RequestHandler } from "express";
 import { s3Client } from "../config/s3";
 import { env } from "../config/env";
 
@@ -21,6 +22,9 @@ const upload = multer({
   },
 });
 
-export const uploadSingle = (field: string) => upload.single(field);
-export const uploadArray = (field: string, max: number) => upload.array(field, max);
-export const uploadFields = (fields: multer.Field[]) => upload.fields(fields);
+// Cast: @types/multer nests its own @types/express which conflicts with the app's Express types.
+export const uploadSingle = (field: string) => upload.single(field) as unknown as RequestHandler;
+export const uploadArray = (field: string, max: number) =>
+  upload.array(field, max) as unknown as RequestHandler;
+export const uploadFields = (fields: multer.Field[]) =>
+  upload.fields(fields) as unknown as RequestHandler;

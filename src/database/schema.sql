@@ -21,6 +21,13 @@ CREATE TYPE content_status AS ENUM ('draft', 'published', 'archived');
 CREATE TYPE contact_form_type AS ENUM ('general', 'service', 'aayojan');
 CREATE TYPE banner_position AS ENUM ('hero_slider', 'middle_ad', 'offer_banner', 'category_banner');
 CREATE TYPE device_source AS ENUM ('web', 'app', 'portal');
+CREATE TYPE notification_target_type AS ENUM ('all', 'selected', 'group', 'topic');
+CREATE TYPE notification_campaign_status AS ENUM (
+  'draft', 'scheduled', 'sending', 'sent', 'cancelled', 'failed'
+);
+CREATE TYPE notification_delivery_status AS ENUM (
+  'pending', 'sent', 'delivered', 'failed', 'skipped'
+);
 
 -- ============================================================
 -- 1. USERS & AUTH
@@ -808,22 +815,69 @@ CREATE INDEX idx_invoices_order ON invoices(order_id);
 CREATE INDEX idx_invoices_number ON invoices(invoice_number);
 
 -- ============================================================
--- 15. NOTIFICATIONS (for app + portal)
+-- 15. NOTIFICATION CAMPAIGNS (admin broadcast management)
+-- ============================================================
+
+CREATE TABLE notification_campaigns (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title VARCHAR(200) NOT NULL,
+    message TEXT NOT NULL,
+    image_url TEXT,
+    type VARCHAR(50) DEFAULT 'promo',
+    target_type notification_target_type NOT NULL DEFAULT 'all',
+    target_user_ids UUID[],
+    status notification_campaign_status NOT NULL DEFAULT 'draft',
+    deep_link TEXT,
+    action_type VARCHAR(50),
+    action_value TEXT,
+    scheduled_at TIMESTAMP WITH TIME ZONE,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    total_users INTEGER DEFAULT 0,
+    success_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_notification_campaigns_status_scheduled
+  ON notification_campaigns(status, scheduled_at);
+CREATE INDEX idx_notification_campaigns_created
+  ON notification_campaigns(created_at DESC);
+CREATE INDEX idx_notification_campaigns_created_by
+  ON notification_campaigns(created_by);
+
+-- ============================================================
+-- 15b. NOTIFICATIONS (per-user inbox + campaign recipients)
 -- ============================================================
 
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    campaign_id UUID REFERENCES notification_campaigns(id) ON DELETE SET NULL,
     title VARCHAR(200) NOT NULL,
     body TEXT,
     type VARCHAR(50), -- booking_update, pandit_assigned, payment, review, promo
     reference_id UUID, -- order_id, service_id, etc.
     reference_type VARCHAR(50), -- order, service, blog
+    image_url TEXT,
+    deep_link TEXT,
+    action_type VARCHAR(50),
+    action_value TEXT,
+    delivery_status notification_delivery_status DEFAULT 'sent',
+    failure_reason TEXT,
     is_read BOOLEAN DEFAULT FALSE,
+    delivered_at TIMESTAMP WITH TIME ZONE,
+    clicked_at TIMESTAMP WITH TIME ZONE,
+    read_at TIMESTAMP WITH TIME ZONE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);
+CREATE INDEX idx_notifications_campaign ON notifications(campaign_id);
+CREATE INDEX idx_notifications_user_inbox
+  ON notifications(user_id, deleted_at, created_at DESC);
 
 -- ============================================================
 -- 16. ACTIVITY LOG (admin audit trail)
@@ -854,26 +908,114 @@ CREATE TABLE app_settings (
     key VARCHAR(100) NOT NULL UNIQUE,
     value TEXT NOT NULL,
     description TEXT,
+    category VARCHAR(50) NOT NULL DEFAULT 'system',
+    value_type VARCHAR(20) NOT NULL DEFAULT 'string',
+    is_public BOOLEAN NOT NULL DEFAULT false,
+    is_editable BOOLEAN NOT NULL DEFAULT true,
     updated_by UUID REFERENCES users(id),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Insert default settings
-INSERT INTO app_settings (key, value, description) VALUES
-('booking_advance_hours', '24', 'Minimum hours before service for booking'),
-('pandit_response_hours', '48', 'Hours pandit has to accept/reject assignment'),
-('otp_expiry_minutes', '10', 'OTP code expiry in minutes'),
-('max_otp_attempts', '5', 'Max OTP verification attempts'),
-('razorpay_key_id', '', 'Razorpay API key ID'),
-('razorpay_key_secret', '', 'Razorpay API key secret'),
-('support_phone', '+918109181057', 'Support phone number'),
-('support_email', 'contact@yajmanapp.in', 'Support email'),
-('support_whatsapp', '+918109181057', 'WhatsApp support number'),
-('invoice_prefix', 'INV', 'Invoice number prefix'),
-('order_prefix', 'YAJ', 'Order number prefix'),
-('s3_bucket', 'yajman-uploads', 'S3 bucket name'),
-('s3_region', 'ap-south-1', 'S3 region'),
-('max_upload_size_mb', '10', 'Max file upload size in MB');
+CREATE INDEX idx_app_settings_category ON app_settings(category);
+CREATE INDEX idx_app_settings_is_public ON app_settings(is_public);
+
+-- Insert default settings (legacy + catalog)
+INSERT INTO app_settings (key, value, description, category, value_type, is_public, is_editable) VALUES
+('booking_advance_hours', '24', 'Minimum hours before service for booking', 'booking', 'number', true, true),
+('pandit_response_hours', '48', 'Hours pandit has to accept/reject assignment', 'booking', 'number', false, true),
+('otp_expiry_minutes', '10', 'OTP code expiry in minutes', 'security', 'number', false, true),
+('max_otp_attempts', '5', 'Max OTP verification attempts', 'security', 'number', false, true),
+('razorpay_key_id', '', 'Razorpay API key ID', 'system', 'string', false, false),
+('razorpay_key_secret', '', 'Razorpay API key secret', 'system', 'string', false, false),
+('support_phone', '+918109181057', 'Support phone number', 'support', 'string', true, true),
+('support_email', 'contact@yajmanapp.in', 'Support email', 'support', 'string', true, true),
+('support_whatsapp', '+918109181057', 'WhatsApp support number', 'support', 'string', true, true),
+('invoice_prefix', 'INV', 'Invoice number prefix', 'system', 'string', false, true),
+('order_prefix', 'YAJ', 'Order number prefix', 'system', 'string', false, true),
+('s3_bucket', 'yajman-uploads', 'S3 bucket name', 'system', 'string', false, false),
+('s3_region', 'ap-south-1', 'S3 region', 'system', 'string', false, false),
+('max_upload_size_mb', '10', 'Max file upload size in MB', 'media', 'number', true, true),
+('android.current_version', '1.0.0', 'Current production Android version label', 'android', 'string', true, true),
+('android.latest_version', '1.0.0', 'Latest Android app version on Play Store', 'android', 'string', true, true),
+('android.minimum_supported_version', '1.0.0', 'Minimum Android version allowed without force update', 'android', 'string', true, true),
+('android.force_update', 'false', 'Force all Android users to update', 'android', 'boolean', true, true),
+('android.update_message', 'A new version is available', 'Android update prompt message', 'android', 'string', true, true),
+('android.store_url', 'https://play.google.com/store/apps/details?id=in.yajman.app', 'Google Play store URL', 'android', 'string', true, true),
+('ios.current_version', '1.0.0', 'Current production iOS version label', 'ios', 'string', true, true),
+('ios.latest_version', '1.0.0', 'Latest iOS app version on App Store', 'ios', 'string', true, true),
+('ios.minimum_supported_version', '1.0.0', 'Minimum iOS version allowed without force update', 'ios', 'string', true, true),
+('ios.force_update', 'false', 'Force all iOS users to update', 'ios', 'boolean', true, true),
+('ios.update_message', 'A new version is available', 'iOS update prompt message', 'ios', 'string', true, true),
+('ios.store_url', 'https://apps.apple.com/app/id000000000', 'Apple App Store URL', 'ios', 'string', true, true),
+('general.app_name', 'Yajman', 'App display name', 'general', 'string', true, true),
+('general.app_tagline', 'Book pandits for every occasion', 'App tagline', 'general', 'string', true, true),
+('general.website_url', 'https://yajmanapp.in', 'Marketing website URL', 'general', 'string', true, true),
+('general.company_address', '', 'Company address', 'general', 'string', true, true),
+('general.privacy_policy_url', 'https://yajmanapp.in/privacy', 'Privacy policy URL', 'general', 'string', true, true),
+('general.terms_url', 'https://yajmanapp.in/terms', 'Terms & conditions URL', 'general', 'string', true, true),
+('general.about_us_url', 'https://yajmanapp.in/about', 'About us URL', 'general', 'string', true, true),
+('general.contact_us_url', 'https://yajmanapp.in/contact', 'Contact us URL', 'general', 'string', true, true),
+('general.maintenance_message', '', 'Message shown during maintenance mode', 'general', 'string', true, true),
+('social.facebook_url', '', 'Facebook page URL', 'social', 'string', true, true),
+('social.instagram_url', '', 'Instagram profile URL', 'social', 'string', true, true),
+('social.youtube_url', '', 'YouTube channel URL', 'social', 'string', true, true),
+('social.twitter_url', '', 'X / Twitter profile URL', 'social', 'string', true, true),
+('social.linkedin_url', '', 'LinkedIn page URL', 'social', 'string', true, true),
+('support.hours', '9:00 AM - 6:00 PM IST', 'Support availability hours', 'support', 'string', true, true),
+('support.telegram_url', '', 'Telegram support link', 'support', 'string', true, true),
+('support.live_chat_url', '', 'Live chat URL', 'support', 'string', true, true),
+('support.help_center_url', '', 'Help center URL', 'support', 'string', true, true),
+('features.booking_enabled', 'true', 'Enable service bookings', 'features', 'boolean', true, true),
+('features.maintenance_mode', 'false', 'Show maintenance screen in mobile apps', 'features', 'boolean', true, true),
+('features.aayojan_enabled', 'true', 'Enable Aayojan events', 'features', 'boolean', true, true),
+('features.reviews_enabled', 'true', 'Enable reviews', 'features', 'boolean', true, true),
+('features.coupons_enabled', 'true', 'Enable coupons', 'features', 'boolean', true, true),
+('features.chat_enabled', 'false', 'Enable in-app chat', 'features', 'boolean', true, true),
+('features.wallet_enabled', 'false', 'Enable wallet', 'features', 'boolean', true, true),
+('features.notifications_enabled', 'true', 'Enable notification module in app', 'features', 'boolean', true, true),
+('features.referral_enabled', 'false', 'Enable referral system', 'features', 'boolean', true, true),
+('features.payments_enabled', 'true', 'Enable online payments', 'features', 'boolean', true, true),
+('features.offline_mode_enabled', 'false', 'Enable offline mode', 'features', 'boolean', true, true),
+('features.gps_tracking_enabled', 'false', 'Enable GPS tracking', 'features', 'boolean', true, true),
+('notifications.push_enabled', 'true', 'Enable push notifications', 'notifications', 'boolean', true, true),
+('notifications.email_enabled', 'true', 'Enable email notifications', 'notifications', 'boolean', false, true),
+('notifications.sms_enabled', 'true', 'Enable SMS notifications', 'notifications', 'boolean', false, true),
+('notifications.promotional_enabled', 'true', 'Allow promotional push campaigns', 'notifications', 'boolean', true, true),
+('notifications.system_enabled', 'true', 'Enable system notifications', 'notifications', 'boolean', true, true),
+('notifications.order_enabled', 'true', 'Enable order notifications', 'notifications', 'boolean', true, true),
+('notifications.marketing_enabled', 'true', 'Enable marketing notifications', 'notifications', 'boolean', true, true),
+('media.max_image_count', '5', 'Max images per upload group', 'media', 'number', true, true),
+('media.allowed_image_types', 'jpeg,png,webp,gif', 'Allowed image MIME subtypes', 'media', 'string', true, true),
+('media.max_video_size_mb', '50', 'Max video upload size in MB', 'media', 'number', true, true),
+('media.max_pdf_size_mb', '10', 'Max PDF upload size in MB', 'media', 'number', true, true),
+('media.allowed_file_types', 'jpeg,png,webp,gif,pdf', 'Allowed upload file types', 'media', 'string', true, true),
+('convenience_fee', '0', 'Checkout convenience fee amount', 'booking', 'number', true, true),
+('booking.cancellation_hours', '24', 'Hours before service when free cancel ends', 'booking', 'number', true, true),
+('booking.max_members', '10', 'Max members per booking', 'booking', 'number', true, true),
+('booking.reschedule_limit', '2', 'Max reschedules per booking', 'booking', 'number', true, true),
+('booking.max_future_booking_days', '90', 'How far ahead users can book', 'booking', 'number', true, true),
+('booking.timeout_minutes', '30', 'Checkout / booking hold timeout', 'booking', 'number', true, true),
+('location.default_city', 'Indore', 'Default city for discovery', 'location', 'string', true, true),
+('location.default_lat', '22.7196', 'Default map latitude', 'location', 'number', true, true),
+('location.default_lng', '75.8577', 'Default map longitude', 'location', 'number', true, true),
+('location.search_radius_km', '50', 'Default search radius in km', 'location', 'number', true, true),
+('location.default_country', 'IN', 'Default country code', 'location', 'string', true, true),
+('location.default_currency', 'INR', 'Default currency code', 'location', 'string', true, true),
+('location.default_timezone', 'Asia/Kolkata', 'Default timezone', 'location', 'string', true, true),
+('security.session_timeout_minutes', '43200', 'JWT / session soft timeout hint (minutes)', 'security', 'number', false, true),
+('security.max_login_attempts', '5', 'Max login / OTP attempts before lockout hint', 'security', 'number', false, true),
+('security.device_token_expiry_days', '365', 'Suggested device token refresh window', 'security', 'number', false, true),
+('behaviour.home_refresh_seconds', '60', 'Suggested home refresh interval', 'behaviour', 'number', true, true),
+('behaviour.cache_ttl_seconds', '60', 'Suggested client settings cache TTL', 'behaviour', 'number', true, true),
+('behaviour.show_intro_screens', 'true', 'Show intro / onboarding screens', 'behaviour', 'boolean', true, true),
+('behaviour.enable_app_rating_popup', 'true', 'Enable app rating prompt', 'behaviour', 'boolean', true, true),
+('behaviour.enable_force_logout', 'false', 'Force logout all sessions remotely', 'behaviour', 'boolean', true, true),
+('behaviour.enable_debug_logs', 'false', 'Enable client debug logs', 'behaviour', 'boolean', false, true),
+('behaviour.enable_crash_reporting', 'true', 'Enable crash reporting', 'behaviour', 'boolean', true, true),
+('behaviour.enable_analytics', 'true', 'Enable analytics', 'behaviour', 'boolean', true, true),
+('behaviour.enable_maintenance_banner', 'false', 'Show maintenance banner', 'behaviour', 'boolean', true, true),
+('stats_pujas_completed', '0', 'Home screen completed pujas count', 'system', 'number', true, true),
+('stats_connected_pandits', '0', 'Home screen connected pandits count', 'system', 'number', true, true);
 
 -- ============================================================
 -- 18. ADD FOREIGN KEY for coupon_usages.order_id
@@ -910,6 +1052,8 @@ CREATE TRIGGER trg_payments_updated BEFORE UPDATE ON payments FOR EACH ROW EXECU
 CREATE TRIGGER trg_pandit_profiles_updated BEFORE UPDATE ON pandit_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_coupons_updated BEFORE UPDATE ON coupons FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_banners_updated BEFORE UPDATE ON banners FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_notification_campaigns_updated BEFORE UPDATE ON notification_campaigns FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_app_settings_updated BEFORE UPDATE ON app_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Auto-calculate discount_percent on services
 CREATE OR REPLACE FUNCTION calc_discount_percent()

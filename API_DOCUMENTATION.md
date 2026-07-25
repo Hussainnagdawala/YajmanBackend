@@ -123,6 +123,121 @@ Auth required. Call on logout / push-permission revoked.
 
 ---
 
+## Notifications (user inbox)
+
+Auth required (`authenticate`). Soft-deleted rows are hidden from all list/detail endpoints.
+
+### `GET /notifications`
+Query: `page`, `limit`, `unread_only` (`true` to return unread only).
+
+### `GET /notifications/unread-count`
+Returns `{ "count": number }` for badge UI.
+
+### `GET /notifications/:id`
+Own notification detail only.
+
+### `POST /notifications/:id/read`
+Marks read (`is_read=true`, stamps `read_at`).
+
+### `POST /notifications/read-all`
+Marks all of the caller's unread notifications as read.
+
+### `POST /notifications/:id/click`
+Records `clicked_at` (and marks read). Use when the user opens a deep link / CTA.
+
+### `DELETE /notifications/:id`
+Soft-deletes one notification from the caller's history.
+
+### `DELETE /notifications`
+Clears the caller's entire notification history (soft-delete all).
+
+Push payload `data` keys (when FCM is configured): `type`, `deep_link`, `action_type`, `action_value`, `campaign_id` and/or `notification_id`, plus transactional `reference_type` / `reference_id` when applicable.
+
+---
+
+## Admin Notifications (campaigns)
+
+Admin auth required. Mounted at `/admin/notifications`.
+
+User picker for “selected users” reuses existing `GET /admin/users` (search/pagination).
+
+### `POST /admin/notifications`
+Create a campaign. JSON or multipart (`image` optional file → S3 folder `notifications`).
+
+```json
+{
+  "title": "Diwali Offer",
+  "message": "Book any puja and get 10% off",
+  "type": "promo",
+  "target_type": "all",
+  "target_user_ids": [],
+  "deep_link": "yajman://home",
+  "action_type": "open_screen",
+  "action_value": "home",
+  "scheduled_at": null
+}
+```
+
+- `target_type`: `"all"` | `"selected"` (`group`/`topic` reserved for future).
+- `target_user_ids` required (non-empty) when `target_type` is `"selected"`.
+- If `scheduled_at` is a future datetime → status `scheduled`; otherwise `draft`.
+- Does **not** send immediately — call `POST /:id/send` (or wait for the scheduler).
+
+### `GET /admin/notifications`
+Query: `page`, `limit`, `search`, `status`, `target_type`, `sort` (`created_at|sent_at|scheduled_at|title`), `order` (`asc|desc`), `from`, `to`.
+
+### `GET /admin/notifications/:id`
+Campaign detail plus paginated recipients (`page`/`limit`). Includes `read_count` / `click_count`.
+
+### `PUT /admin/notifications/:id`
+Update only when status is `draft` or `scheduled`. Multipart image optional.
+
+### `DELETE /admin/notifications/:id`
+Delete only when status is `draft`.
+
+### `POST /admin/notifications/:id/send`
+Resolves audience → writes inbox rows → FCM fan-out (no-op if Firebase unset) → sets status `sent`. Allowed from `draft` or `scheduled`.
+
+### `POST /admin/notifications/:id/resend`
+Clones a `sent`/`failed` campaign into a new campaign and sends it immediately.
+
+### `POST /admin/notifications/:id/duplicate`
+Clones into a new `draft` (does not send).
+
+### `POST /admin/notifications/:id/cancel`
+Cancels a `scheduled` campaign.
+
+**Firebase env (optional locally):** `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, or `FIREBASE_SERVICE_ACCOUNT_PATH`. Without these, campaigns still create in-app inbox rows; push is skipped with a server warning.
+
+**Migration:** `src/database/migrations/002_notification_campaigns.sql` (also applied by `yarn seed`).
+
+---
+
+## App Settings
+
+### Public — `GET /app/settings`
+No auth. Returns all `is_public` settings nested by category. Optional query: `platform=android|ios`, `app_version=1.2.0` — when both are present, response includes computed `version_check` (not stored).
+
+Headers: `Cache-Control: public, max-age=60` and weak `ETag` (supports `If-None-Match` → 304).
+
+Secrets (`razorpay_*`, `s3_*`, etc.) are never included.
+
+### Admin — `/admin/app-settings`
+Admin auth required.
+
+| Method | Path | Behavior |
+| ------ | ---- | -------- |
+| GET | `/admin/app-settings` | All settings grouped by category (`?category=` optional) |
+| GET | `/admin/app-settings/:key` | Single key (URL-encode dotted keys) |
+| PUT | `/admin/app-settings` | Bulk upsert `{ "settings": { "android.force_update": true } }` |
+| PATCH | `/admin/app-settings/:key` | `{ "value": ... }` |
+
+Phase 1: only known seeded keys. Non-editable keys (secrets) return 403. Writes audit `activity_logs` (`entity_type = app_setting`) and invalidate the in-memory public cache.
+
+**Migrations:** `003_app_settings_management.sql` + `004_app_settings_catalog_expand.sql` (also applied by `yarn seed`).
+
+---
+
 ## Categories / Types / Tags (public)
 
 ### `GET /categories`
@@ -626,15 +741,33 @@ All fields optional.
 
 ---
 
-## Notifications (in-app, not yet a client-facing feature)
+## Notifications (in-app + FCM)
 
-`services/notification.service.ts` writes rows to the `notifications` table on: pandit assigned, assignment accepted/rejected, booking completed. **No `GET /notifications` endpoint exists yet** for any client to read these back, and no push/WhatsApp delivery happens — it's currently an audit trail only. If a client needs to surface these, that endpoint doesn't exist and would need to be built.
+### User inbox
+- `GET /notifications` — paginated history (`unread_only` optional)
+- `GET /notifications/unread-count`
+- `GET /notifications/:id`
+- `POST /notifications/:id/read` · `POST /notifications/read-all`
+- `POST /notifications/:id/click`
+- `DELETE /notifications/:id` · `DELETE /notifications` (clear history)
+
+### Admin campaigns
+- `POST/GET/PUT/DELETE /admin/notifications`
+- `POST /admin/notifications/:id/send|resend|duplicate|cancel`
+- Selected-user picker: reuse `GET /admin/users`
+- Optional image upload (S3 folder `notifications`)
+- Scheduled sends via `node-cron` every minute
+- Apply migration: `psql -f src/database/migrations/002_notification_campaigns.sql` (or `yarn seed`)
+
+Transactional events (pandit assigned/accepted/rejected/completed) still call `createNotification()`, which now also best-effort pushes via FCM when credentials are configured.
 
 ---
 
 ## Known gaps (things intentionally not built — see `README.md` for full detail)
 
-- Settings management (`app_settings` admin CRUD) and the admin activity log — named in the internal implementation plan but not in the endpoint spec, so not built.
-- Cron jobs: OTP cleanup, unpaid-order auto-cancel, stale pandit-assignment auto-expiry — all Step 14, not yet implemented.
-- WhatsApp/push notification *delivery* — device tokens are stored (`/profile/device-tokens`) and in-app notification rows are written, but nothing actually sends a push or WhatsApp message yet.
+- Browsing the admin activity log UI — `activity_logs` is written for notification campaigns and app setting updates, but there is still no `GET /admin/activity-log` endpoint.
+- Cron jobs: OTP cleanup, unpaid-order auto-cancel, stale pandit-assignment auto-expiry — still not implemented (notification scheduling cron **is** implemented).
+- WhatsApp notification delivery — still not built (FCM push **is** implemented when Firebase env is set).
 - Aayojan event reviews (`aayojan_event_reviews` table exists in schema) — no endpoint, no booking/attendance concept to gate who can review an event.
+- User-group / topic / city / subscription targeting for campaigns — schema reserves `group`/`topic` on `target_type`; not wired yet.
+- Redis/Bull queue for very large broadcasts — Phase 1 sends in-process in FCM batches of 500.

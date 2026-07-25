@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import * as profileController from "../controllers/profile.controller";
 import { validate } from "../middleware/validate";
 import { uploadSingle } from "../middleware/upload";
@@ -11,7 +11,7 @@ router.get("/", profileController.getProfile);
 router.patch("/", validate(updateProfileSchema), profileController.updateProfile);
 router.post(
   "/avatar",
-  (req, _res, next) => {
+  (req: Request, _res: Response, next: NextFunction) => {
     req.uploadFolder = "avatars";
     next();
   },
