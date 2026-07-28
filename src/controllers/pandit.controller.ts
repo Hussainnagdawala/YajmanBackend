@@ -26,6 +26,10 @@ import {
   listUpcomingBookings,
   findAcceptedAssignmentForPanditByOrder,
   completeAssignmentForOrder,
+  listPanditsAdmin as listPanditsAdminQuery,
+  countPanditsAdmin,
+  findPanditDetailAdmin,
+  findPanditUsersWithoutProfile,
 } from "../queries/pandit.queries";
 
 const ASSIGNMENT_STATUSES = ["pending", "accepted", "rejected", "expired", "completed"];
@@ -40,6 +44,13 @@ const getOrCreatePanditProfile = async (userId: string) => {
 
   const created = await pool.query(createPanditProfile, [userId, displayName]);
   return created.rows[0];
+};
+
+const backfillMissingPanditProfiles = async (): Promise<void> => {
+  const missing = await pool.query<{ id: string; name: string | null; phone: string }>(findPanditUsersWithoutProfile);
+  for (const user of missing.rows) {
+    await pool.query(createPanditProfile, [user.id, user.name ?? user.phone]);
+  }
 };
 
 const notifyAllAdmins = async (title: string, body: string, referenceId: string) => {
@@ -242,6 +253,61 @@ export const markBookingComplete = async (req: Request, res: Response, next: Nex
     );
 
     return success(res, updated.rows[0], "Booking marked as completed");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Admin: browse pandit profiles ────────────────────────────
+// Distinct from GET /admin/users?role=pandit (Step 3, bare user rows) — this
+// joins pandit_profiles so an admin picker has rating/specializations/
+// availability and, critically, the pandit_profile.id that
+// POST /admin/pandit-assignments actually needs (not the user id).
+
+export const listPanditsAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await backfillMissingPanditProfiles();
+
+    const q = req.query as unknown as {
+      search?: string;
+      is_available?: boolean;
+      is_verified?: boolean;
+      page: number;
+      limit: number;
+    };
+    const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
+
+    const values: unknown[] = [];
+    const whereClauses: string[] = [];
+    if (q.search) {
+      values.push(`%${q.search}%`);
+      whereClauses.push(`(pp.display_name ILIKE $${values.length} OR u.phone ILIKE $${values.length})`);
+    }
+    if (q.is_available !== undefined) {
+      values.push(q.is_available);
+      whereClauses.push(`pp.is_available = $${values.length}`);
+    }
+    if (q.is_verified !== undefined) {
+      values.push(q.is_verified);
+      whereClauses.push(`pp.is_verified = $${values.length}`);
+    }
+
+    const [rows, count] = await Promise.all([
+      pool.query(listPanditsAdminQuery(whereClauses, values.length + 1, values.length + 2), [...values, safeLimit, offset]),
+      pool.query<{ count: number }>(countPanditsAdmin(whereClauses), values),
+    ]);
+
+    return success(res, rows.rows, "Pandits fetched", 200, meta(count.rows[0].count));
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getPanditAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(findPanditDetailAdmin, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Pandit not found", 404);
+    return success(res, result.rows[0]);
   } catch (err) {
     next(err);
   }

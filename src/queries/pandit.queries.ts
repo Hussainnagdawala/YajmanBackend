@@ -16,6 +16,42 @@ export const updatePanditProfile = (fields: string[]) => `
   RETURNING *
 `;
 
+// A pandit_profiles row only otherwise gets created lazily when the pandit
+// logs in and touches GET/PATCH /pandit/profile themselves — so a pandit
+// created via POST /admin/users who has never logged in has no profile row
+// yet. The admin listing backfills these eagerly so newly-onboarded pandits
+// are immediately visible/assignable, not just after their first login.
+export const findPanditUsersWithoutProfile = `
+  SELECT u.id, u.name, u.phone FROM users u
+  WHERE u.role = 'pandit'
+    AND NOT EXISTS (SELECT 1 FROM pandit_profiles pp WHERE pp.user_id = u.id)
+`;
+
+// ─── Pandit profile: admin listing ───────────────────────────
+
+export const listPanditsAdmin = (whereClauses: string[], limitIdx: number, offsetIdx: number) => `
+  SELECT pp.*, u.phone, u.email, u.status AS user_status
+  FROM pandit_profiles pp
+  JOIN users u ON u.id = pp.user_id
+  ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
+  ORDER BY pp.created_at DESC
+  LIMIT $${limitIdx} OFFSET $${offsetIdx}
+`;
+
+export const countPanditsAdmin = (whereClauses: string[]) => `
+  SELECT COUNT(*)::int AS count
+  FROM pandit_profiles pp
+  JOIN users u ON u.id = pp.user_id
+  ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
+`;
+
+export const findPanditDetailAdmin = `
+  SELECT pp.*, u.phone, u.email, u.status AS user_status
+  FROM pandit_profiles pp
+  JOIN users u ON u.id = pp.user_id
+  WHERE pp.id = $1
+`;
+
 // ─── Assignments: creation + lookup ──────────────────────────
 
 export const findOrderForAssignment = `SELECT * FROM orders WHERE id = $1`;

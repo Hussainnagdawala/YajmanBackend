@@ -10,6 +10,7 @@ export const createOrderSchema = z.object({
   customer_calling_number: z.string().regex(/^[6-9]\d{9}$/).optional().nullable(),
   customer_email: z.string().email().max(150).optional(),
   members: z.array(z.string().trim().min(1)).min(1),
+  addon_ids: z.array(z.string().uuid()).optional().default([]),
   gotra: z.string().trim().max(100).optional(),
   gotra_unknown: z.coerce.boolean().default(false),
   coupon_code: z.string().trim().optional(),

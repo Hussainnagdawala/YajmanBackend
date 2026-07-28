@@ -27,6 +27,10 @@ export const findBookingDetail = `
       (SELECT json_agg(om.name ORDER BY om.display_order) FROM order_members om WHERE om.order_id = o.id),
       '[]'
     ) AS members,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('name', oa.name, 'price', oa.price)) FROM order_addons oa WHERE oa.order_id = o.id),
+      '[]'
+    ) AS addons,
     (
       SELECT jsonb_build_object(
         'id', pp.id, 'status', pa.status, 'display_name', pp.display_name,

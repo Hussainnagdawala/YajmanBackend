@@ -18,6 +18,7 @@ import panditRoutes from "./pandit.routes";
 import contactRoutes from "./contact.routes";
 import notificationRoutes from "./notification.routes";
 import appRoutes from "./app.routes";
+import addonRoutes from "./addon.routes";
 
 const router = Router();
 
@@ -38,5 +39,6 @@ router.use("/pandit", authenticate, panditRoutes);
 router.use("/contact", contactRoutes);
 router.use("/notifications", authenticate, notificationRoutes);
 router.use("/app", appRoutes);
+router.use("/addons", addonRoutes);
 
 export default router;

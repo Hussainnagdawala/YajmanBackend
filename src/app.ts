@@ -1,3 +1,4 @@
+import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -15,6 +16,17 @@ app.use(cors()
   //   // origin: "*",
   //   // credentials: true,
   // })
+);
+
+// Local disk uploads (temporary stand-in for S3, see middleware/upload.ts).
+// helmet() sets Cross-Origin-Resource-Policy: same-origin by default, which
+// would silently block the website/app from loading these images at all if
+// they're on a different origin/port — override it just for this static mount.
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"), {
+    setHeaders: (res) => res.set("Cross-Origin-Resource-Policy", "cross-origin"),
+  })
 );
 app.use(
   express.json({

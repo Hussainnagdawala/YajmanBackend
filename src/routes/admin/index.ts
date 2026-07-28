@@ -17,11 +17,13 @@ import couponRoutes from "./coupon.routes";
 import reviewRoutes from "./review.routes";
 import invoiceRoutes from "./invoice.routes";
 import panditAssignmentRoutes from "./pandit.routes";
+import panditProfileRoutes from "./pandit-profile.routes";
 import contactRoutes from "./contact.routes";
 import dashboardRoutes from "./dashboard.routes";
 import orderRoutes from "./order.routes";
 import notificationRoutes from "./notification.routes";
 import settingsRoutes from "./settings.routes";
+import addonRoutes from "./addon.routes";
 
 const router = Router();
 
@@ -43,10 +45,12 @@ router.use("/coupons", couponRoutes);
 router.use("/reviews", reviewRoutes);
 router.use("/invoices", invoiceRoutes);
 router.use("/pandit-assignments", panditAssignmentRoutes);
+router.use("/pandits", panditProfileRoutes);
 router.use("/contact-entries", contactRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/orders", orderRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/app-settings", settingsRoutes);
+router.use("/addons", addonRoutes);
 
 export default router;

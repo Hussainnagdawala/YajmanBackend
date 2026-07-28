@@ -10,9 +10,11 @@ import { createRazorpayOrder, verifyPaymentSignature, verifyWebhookSignature } f
 import { razorpay } from "../config/razorpay";
 import { env } from "../config/env";
 import { findActiveServiceById } from "../queries/service.queries";
+import { listAddonsForService } from "../queries/addon.queries";
 import {
   createOrder as createOrderQuery,
   insertOrderMember,
+  insertOrderAddon,
   findOrderById,
   updateOrderStatus,
   getAppSettingByKey,
@@ -34,7 +36,17 @@ interface PgError {
 
 const MAX_ORDER_NUMBER_RETRIES = 5;
 
-const createOrderWithMembers = async (orderValues: unknown[], members: string[]) => {
+interface SelectedAddon {
+  id: string;
+  name: string;
+  price: number;
+}
+
+const createOrderWithMembers = async (
+  orderValues: unknown[],
+  members: string[],
+  selectedAddons: SelectedAddon[]
+) => {
   const client: PoolClient = await pool.connect();
   try {
     let order: Record<string, unknown> | undefined;
@@ -47,6 +59,9 @@ const createOrderWithMembers = async (orderValues: unknown[], members: string[])
         order = result.rows[0];
         for (const [i, name] of members.entries()) {
           await client.query(insertOrderMember, [order!.id, name, i]);
+        }
+        for (const addon of selectedAddons) {
+          await client.query(insertOrderAddon, [order!.id, addon.id, addon.name, addon.price]);
         }
         await client.query("COMMIT");
         break;
@@ -70,7 +85,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
   try {
     const {
       service_id, booking_date, booking_time, customer_name, customer_phone, customer_whatsapp,
-      customer_calling_number, customer_email, members, gotra, gotra_unknown, coupon_code,
+      customer_calling_number, customer_email, members, addon_ids, gotra, gotra_unknown, coupon_code,
       address, city, pincode, special_instructions, birth_date, birth_time, birth_place,
     } = req.body;
     const userId = req.user!.id;
@@ -81,6 +96,26 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     const bookingDateTime = computeBookingDateTime(booking_date, booking_time);
     await assertNoDuplicateBooking(userId, service_id, booking_date);
+
+    const requestedAddonIds: string[] = addon_ids ?? [];
+    let selectedAddons: SelectedAddon[] = [];
+    if (requestedAddonIds.length > 0) {
+      if (!service.is_addon_available) {
+        throw new AppError("VALIDATION_ERROR", "Addons are not available for this service", 400);
+      }
+      const availableAddons = (await pool.query(listAddonsForService, [service_id])).rows;
+      const availableById = new Map(availableAddons.map((a) => [a.id, a]));
+      for (const id of requestedAddonIds) {
+        if (!availableById.has(id)) {
+          throw new AppError("VALIDATION_ERROR", `Addon ${id} is not available for this service`, 400);
+        }
+      }
+      selectedAddons = requestedAddonIds.map((id) => {
+        const a = availableById.get(id);
+        return { id: a.id, name: a.name, price: Number(a.price) };
+      });
+    }
+    const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
     const basePrice = Number(service.price);
     let discountAmount = 0;
@@ -99,7 +134,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     const settingResult = await pool.query<{ value: string }>(getAppSettingByKey, ["convenience_fee"]);
     const convenienceFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
-    const totalAmount = Math.round((basePrice - discountAmount + convenienceFee) * 100) / 100;
+    // Coupon discount applies to basePrice only — addons are added on top, undiscounted.
+    const totalAmount = Math.round((basePrice + addonTotal - discountAmount + convenienceFee) * 100) / 100;
 
     const order = await createOrderWithMembers(
       [
@@ -108,8 +144,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         booking_date, booking_time, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
         basePrice, discountAmount, convenienceFee, totalAmount, couponId, couponCode,
         birth_date ?? null, birth_time ?? null, birth_place ?? null, special_instructions ?? null,
+        addonTotal,
       ],
-      members
+      members,
+      selectedAddons
     );
 
     let razorpayOrder;

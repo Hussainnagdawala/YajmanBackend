@@ -41,6 +41,10 @@ export const getBookingInvoice = async (req: Request, res: Response, next: NextF
         pincode: order.pincode,
       },
       service_title: order.service_title,
+      addons: (order.addons ?? []).map((a: { name: string; price: number }) => ({
+        name: a.name,
+        price: Number(a.price),
+      })),
       pricing: {
         base_price: Number(order.base_price),
         discount_amount: Number(order.discount_amount),

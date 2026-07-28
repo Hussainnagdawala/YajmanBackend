@@ -641,6 +641,15 @@ Rules: `code` 3-30 chars (auto-uppercased); `discount_value`/`max_discount_amoun
 
 ---
 
+## Pandits (browse profiles)
+
+Distinct from "Pandit Assignments" below — this lists `pandit_profiles`, not assignment records. Use it to power an admin picker (search/filter, then feed the resulting `id` into `POST /admin/pandit-assignments` as `pandit_id`).
+
+### `GET /admin/pandits` — query: `search` (matches display_name or phone), `is_available`, `is_verified`, `page`, `limit`
+### `GET /admin/pandits/:id` — single profile, joined with phone/email/user_status
+
+Note: a pandit's `pandit_profiles` row doesn't exist until they've called `GET`/`PATCH /pandit/profile` at least once (see § 3) — a pandit created via `POST /admin/users` but who has never logged in won't show up here yet.
+
 ## Pandit Assignments
 
 ### `POST /admin/pandit-assignments` — assigns a pandit to an order, sets `respond_by` = now + 48h, order status → `pandit_assigned`. Blocked if order is cancelled/completed/refunded, or if the pandit already has an *accepted* booking at that exact date+time.

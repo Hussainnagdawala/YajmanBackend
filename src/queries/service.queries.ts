@@ -6,13 +6,15 @@ export const createService = `
     short_description, about_puja, description, custom_content,
     location, city, state, pincode, latitude, longitude,
     feature_image_url, video_url, duration_minutes, advance_booking_hours,
-    is_featured, is_bestseller, display_order, meta_title, meta_description, created_by
+    is_featured, is_bestseller, display_order, meta_title, meta_description, created_by,
+    is_addon_available
   ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10,
     $11, $12, $13, $14, $15, $16,
     $17, $18, $19, $20,
-    $21, $22, $23, $24, $25, $26
+    $21, $22, $23, $24, $25, $26,
+    $27
   )
   RETURNING *
 `;
@@ -91,7 +93,11 @@ export const findServiceBySlug = `
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', f.id, 'question', f.question, 'answer', f.answer) ORDER BY f.display_order)
        FROM service_faqs f WHERE f.service_id = s.id AND f.is_active = true), '[]'
-    ) AS faqs
+    ) AS faqs,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', a.id, 'name', a.name, 'image_url', a.image_url, 'price', a.price))
+       FROM service_addons sa JOIN addons a ON a.id = sa.addon_id WHERE sa.service_id = s.id AND a.is_active = true), '[]'
+    ) AS addons
   FROM services s
   JOIN categories c ON c.id = s.category_id
   WHERE s.slug = $1 AND s.is_active = true AND s.status = 'published'
@@ -127,7 +133,11 @@ export const findServiceByIdDetail = `
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', f.id, 'question', f.question, 'answer', f.answer) ORDER BY f.display_order)
        FROM service_faqs f WHERE f.service_id = s.id AND f.is_active = true), '[]'
-    ) AS faqs
+    ) AS faqs,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', a.id, 'name', a.name, 'image_url', a.image_url, 'price', a.price))
+       FROM service_addons sa JOIN addons a ON a.id = sa.addon_id WHERE sa.service_id = s.id AND a.is_active = true), '[]'
+    ) AS addons
   FROM services s
   JOIN categories c ON c.id = s.category_id
   WHERE s.id = $1

@@ -52,3 +52,9 @@ export const listAdminAssignmentsQuerySchema = listAssignmentsQuerySchema.extend
 export const listPanditBookingsQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
+
+export const listPanditsAdminQuerySchema = paginationSchema.extend({
+  search: z.string().trim().optional(),
+  is_available: z.coerce.boolean().optional(),
+  is_verified: z.coerce.boolean().optional(),
+});

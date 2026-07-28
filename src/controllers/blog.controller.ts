@@ -31,6 +31,7 @@ import {
 } from "../queries/blog.queries";
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
+type MulterS3File = Express.MulterS3.File;
 
 // ─── Admin: blog categories ──────────────────────────────────
 
@@ -90,9 +91,10 @@ export const listBlogAuthorsAdmin = async (_req: Request, res: Response, next: N
 
 export const createBlogAuthor = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const file = req.file as MulterS3File | undefined;
     const { name, bio, user_id } = req.body;
     const slug = await generateUniqueSlug(name, "blogs");
-    const result = await pool.query(createBlogAuthorQuery, [name, slug, bio ?? null, user_id ?? null]);
+    const result = await pool.query(createBlogAuthorQuery, [name, slug, bio ?? null, user_id ?? null, file?.location ?? null]);
     return success(res, result.rows[0], "Blog author created", 201);
   } catch (err) {
     next(err);
@@ -101,9 +103,14 @@ export const createBlogAuthor = async (req: Request, res: Response, next: NextFu
 
 export const updateBlogAuthor = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const file = req.file as MulterS3File | undefined;
     const fields = Object.keys(req.body);
-    if (fields.length === 0) throw new AppError("VALIDATION_ERROR", "No fields to update", 400);
     const values = fields.map((f) => req.body[f]);
+    if (file) {
+      fields.push("avatar_url");
+      values.push(file.location);
+    }
+    if (fields.length === 0) throw new AppError("VALIDATION_ERROR", "No fields to update", 400);
     const result = await pool.query(updateBlogAuthorQuery(fields), [req.params.id, ...values]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Blog author not found", 404);
     return success(res, result.rows[0], "Blog author updated");

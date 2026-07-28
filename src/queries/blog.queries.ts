@@ -20,8 +20,8 @@ export const softDeleteBlogCategory = `UPDATE blog_categories SET is_active = fa
 
 export const listAllBlogAuthors = `SELECT * FROM blog_authors ORDER BY name`;
 export const createBlogAuthor = `
-  INSERT INTO blog_authors (name, slug, bio, user_id)
-  VALUES ($1, $2, $3, $4)
+  INSERT INTO blog_authors (name, slug, bio, user_id, avatar_url)
+  VALUES ($1, $2, $3, $4, $5)
   RETURNING *
 `;
 export const updateBlogAuthor = (fields: string[]) => `

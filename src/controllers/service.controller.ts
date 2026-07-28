@@ -37,6 +37,7 @@ import {
   updateTemple as updateTempleQuery,
   softDeleteTemple,
 } from "../queries/service.queries";
+import { clearServiceAddons, setServiceAddons } from "../queries/addon.queries";
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
 
@@ -60,6 +61,7 @@ interface ServiceRelations {
   type_ids?: string[];
   tag_ids?: string[];
   temple_ids?: string[];
+  addon_ids?: string[];
   key_features?: KeyFeatureInput[];
   packages?: PackageInput[];
   faqs?: FaqInput[];
@@ -81,6 +83,12 @@ const replaceServiceRelations = async (
   if (relations.temple_ids !== undefined) {
     await client.query(clearServiceTemples, [serviceId]);
     if (relations.temple_ids.length > 0) await client.query(setServiceTemples, [serviceId, relations.temple_ids]);
+  }
+  // Standalone junction — independent of type_ids/tag_ids/temple_ids above,
+  // just copies the same clear-then-set shape.
+  if (relations.addon_ids !== undefined) {
+    await client.query(clearServiceAddons, [serviceId]);
+    if (relations.addon_ids.length > 0) await client.query(setServiceAddons, [serviceId, relations.addon_ids]);
   }
   if (relations.key_features !== undefined) {
     await client.query(clearKeyFeatures, [serviceId]);
@@ -308,12 +316,12 @@ export const createService = async (req: Request, res: Response, next: NextFunct
   const client = await pool.connect();
   try {
     const files = req.files as MulterS3Files | undefined;
-    // const featureImage = files?.feature_image?.[0];
-    const featureImage = { location: 'ads' }
-    // if (!featureImage) throw new AppError("VALIDATION_ERROR", "feature_image file is required", 400);
+    const featureImage = files?.feature_image?.[0];
+    // const featureImage = { location: 'ads' }
+    if (!featureImage) throw new AppError("VALIDATION_ERROR", "feature_image file is required", 400);
 
     const {
-      title, category_id, type_ids, tag_ids, temple_ids, price, original_price,
+      title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, price, original_price,
       short_description, about_puja, description, custom_content,
       location, city, state, pincode, latitude, longitude, video_url,
       duration_minutes, advance_booking_hours, is_featured, is_bestseller,
@@ -331,10 +339,11 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       location ?? null, city ?? null, state ?? null, pincode ?? null, latitude ?? null, longitude ?? null,
       featureImage.location || null, video_url ?? null, duration_minutes ?? null, advance_booking_hours,
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
+      is_addon_available,
     ]);
     const service = result.rows[0];
 
-    await replaceServiceRelations(client, service.id, { type_ids, tag_ids, temple_ids, key_features, packages, faqs });
+    await replaceServiceRelations(client, service.id, { type_ids, tag_ids, temple_ids, addon_ids, key_features, packages, faqs });
 
     if (files?.images && files.images.length > 0) {
       for (const [i, img] of files.images.entries()) {
@@ -360,7 +369,7 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     const existing = await client.query(findServiceById, [req.params.id]);
     if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
 
-    const { type_ids, tag_ids, temple_ids, key_features, packages, faqs, custom_content, ...rest } = req.body;
+    const { type_ids, tag_ids, temple_ids, addon_ids, key_features, packages, faqs, custom_content, ...rest } = req.body;
     const files = req.files as MulterS3Files | undefined;
 
     const fields: string[] = [];
@@ -393,7 +402,7 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       await client.query(updateServiceQuery(fields), [req.params.id, ...values]);
     }
 
-    await replaceServiceRelations(client, req.params.id, { type_ids, tag_ids, temple_ids, key_features, packages, faqs });
+    await replaceServiceRelations(client, req.params.id, { type_ids, tag_ids, temple_ids, addon_ids, key_features, packages, faqs });
 
     if (files?.images && files.images.length > 0) {
       const maxOrder = await client.query<{ max_order: number }>(maxServiceImageOrder, [req.params.id]);
