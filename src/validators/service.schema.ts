@@ -7,7 +7,10 @@ const jsonPreprocess = (val: unknown) => {
     try {
       return JSON.parse(val);
     } catch {
-      return val;
+      // Not JSON — a single plain value sent as one form field (e.g.
+      // type_ids: "<uuid>" instead of type_ids: '["<uuid>"]'). Treat it as
+      // a one-item array instead of failing with "Expected array, received string".
+      return [val];
     }
   }
   return val;
