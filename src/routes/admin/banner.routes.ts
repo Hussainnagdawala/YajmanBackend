@@ -20,5 +20,6 @@ router.post("/", setUploadFolder, bannerUploads, validate(createBannerSchema), h
 router.get("/", homeController.listBannersAdmin);
 router.patch("/:id", setUploadFolder, bannerUploads, validate(updateBannerSchema), homeController.updateBanner);
 router.delete("/:id", homeController.deleteBanner);
+router.delete("/:id/permanent", homeController.deleteBannerPermanently);
 
 export default router;

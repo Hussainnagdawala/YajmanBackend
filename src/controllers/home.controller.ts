@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
+import { deleteFromS3 } from "../services/upload.service";
 import {
   listActivePopularSearches,
   listAllPopularSearches,
@@ -13,6 +14,7 @@ import {
   createBanner as createBannerQuery,
   updateBanner as updateBannerQuery,
   softDeleteBanner,
+  hardDeleteBanner,
   listActiveTestimonials,
   listAllTestimonials,
   createTestimonial as createTestimonialQuery,
@@ -187,6 +189,20 @@ export const deleteBanner = async (req: Request, res: Response, next: NextFuncti
     const result = await pool.query(softDeleteBanner, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Banner not found", 404);
     return success(res, result.rows[0], "Banner deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Permanent delete — no undo. Also removes the uploaded image file from disk,
+// unlike the soft delete above which leaves it in place (banner can be restored).
+export const deleteBannerPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteBanner, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Banner not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    if (result.rows[0].mobile_image_url) await deleteFromS3(result.rows[0].mobile_image_url);
+    return success(res, result.rows[0], "Banner permanently deleted");
   } catch (err) {
     next(err);
   }

@@ -321,7 +321,7 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     if (!featureImage) throw new AppError("VALIDATION_ERROR", "feature_image file is required", 400);
 
     const {
-      title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, price, original_price,
+      title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, benefits, price, original_price,
       short_description, about_puja, description, custom_content,
       location, city, state, pincode, latitude, longitude, video_url,
       duration_minutes, advance_booking_hours, is_featured, is_bestseller,
@@ -339,7 +339,7 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       location ?? null, city ?? null, state ?? null, pincode ?? null, latitude ?? null, longitude ?? null,
       featureImage.location || null, video_url ?? null, duration_minutes ?? null, advance_booking_hours,
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
-      is_addon_available,
+      is_addon_available, benefits,
     ]);
     const service = result.rows[0];
 

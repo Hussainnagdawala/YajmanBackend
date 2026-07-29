@@ -39,6 +39,7 @@ export const updateBanner = (fields: string[]) => `
   RETURNING *
 `;
 export const softDeleteBanner = `UPDATE banners SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *`;
+export const hardDeleteBanner = `DELETE FROM banners WHERE id = $1 RETURNING *`;
 
 // ─── Testimonials ────────────────────────────────────────────
 
