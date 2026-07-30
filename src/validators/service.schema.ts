@@ -26,12 +26,6 @@ const jsonArrayDefaulted = <T extends z.ZodTypeAny>(schema: T) =>
 const jsonArrayOptional = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess(jsonPreprocess, z.array(schema).optional());
 
-const keyFeatureSchema = z.object({
-  title: z.string().trim().min(1).max(150),
-  description: z.string().trim().optional(),
-  icon_url: z.string().trim().optional(),
-});
-
 const packageItemSchema = z.object({
   name: z.string().trim().min(1),
   quantity: z.union([z.string(), z.number()]).optional(),
@@ -59,34 +53,35 @@ export const createServiceSchema = z.object({
   addon_ids: jsonArrayDefaulted(z.string().uuid()),
   is_addon_available: z.coerce.boolean().default(false),
   benefits: jsonArrayDefaulted(z.string().trim().min(1)),
-  price: z.coerce.number().positive(),
+  price: z.coerce.number().nonnegative().optional(),
   original_price: z.coerce.number().positive().optional(),
   short_description: z.string().trim().optional(),
   about_puja: z.string().trim().optional(),
   description: z.string().trim().optional(),
   custom_content: z.string().optional(),
-  location: z.string().trim().max(200).optional(),
-  city: z.string().trim().max(100).optional(),
-  state: z.string().trim().max(100).optional(),
   pincode: z.string().trim().max(10).optional(),
   latitude: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
   video_url: z.string().trim().optional(),
   duration_minutes: z.coerce.number().int().positive().optional(),
-  advance_booking_hours: z.coerce.number().int().nonnegative().default(24),
+  advance_booking_days: z.coerce.number().int().nonnegative().default(0),
+  availability_start_date: z.coerce.date().optional(),
+  availability_end_date: z.coerce.date().optional(),
+  booking_availability_type: z.enum(["all_day", "specific_day"]).default("all_day"),
+  available_dates: jsonArrayDefaulted(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   is_featured: z.coerce.boolean().default(false),
   is_bestseller: z.coerce.boolean().default(false),
   display_order: z.coerce.number().int().default(0),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
-  key_features: jsonArrayDefaulted(keyFeatureSchema),
+  key_features: jsonArrayDefaulted(z.string().trim().min(1)),
   packages: jsonArrayDefaulted(packageSchema),
   faqs: jsonArrayDefaulted(faqSchema),
 });
 
 // Independent schema (not createServiceSchema.partial()) — partial() only makes
 // keys optional, it does not strip the .default()s above, which would otherwise
-// silently reset advance_booking_hours/is_featured/is_bestseller/display_order/
+// silently reset advance_booking_days/is_featured/is_bestseller/display_order/
 // every array field to their create-time defaults on every partial PATCH.
 export const updateServiceSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -97,28 +92,29 @@ export const updateServiceSchema = z.object({
   addon_ids: jsonArrayOptional(z.string().uuid()),
   is_addon_available: z.coerce.boolean().optional(),
   benefits: jsonArrayOptional(z.string().trim().min(1)),
-  price: z.coerce.number().positive().optional(),
+  price: z.coerce.number().nonnegative().optional(),
   original_price: z.coerce.number().positive().optional(),
   short_description: z.string().trim().optional(),
   about_puja: z.string().trim().optional(),
   description: z.string().trim().optional(),
   custom_content: z.string().optional(),
-  location: z.string().trim().max(200).optional(),
-  city: z.string().trim().max(100).optional(),
-  state: z.string().trim().max(100).optional(),
   pincode: z.string().trim().max(10).optional(),
   latitude: z.coerce.number().optional(),
   longitude: z.coerce.number().optional(),
   video_url: z.string().trim().optional(),
   duration_minutes: z.coerce.number().int().positive().optional(),
-  advance_booking_hours: z.coerce.number().int().nonnegative().optional(),
+  advance_booking_days: z.coerce.number().int().nonnegative().optional(),
+  availability_start_date: z.coerce.date().optional(),
+  availability_end_date: z.coerce.date().optional(),
+  booking_availability_type: z.enum(["all_day", "specific_day"]).optional(),
+  available_dates: jsonArrayOptional(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   is_featured: z.coerce.boolean().optional(),
   is_bestseller: z.coerce.boolean().optional(),
   is_active: z.coerce.boolean().optional(),
   display_order: z.coerce.number().int().optional(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
-  key_features: jsonArrayOptional(keyFeatureSchema),
+  key_features: jsonArrayOptional(z.string().trim().min(1)),
   packages: jsonArrayOptional(packageSchema),
   faqs: jsonArrayOptional(faqSchema),
 });
@@ -133,7 +129,6 @@ export const listServicesQuerySchema = paginationSchema.extend({
   sort: z.enum(["price_asc", "price_desc", "rating", "newest", "title"]).optional(),
   is_featured: z.coerce.boolean().optional(),
   is_bestseller: z.coerce.boolean().optional(),
-  city: z.string().optional(),
 });
 
 export const listServicesAdminQuerySchema = paginationSchema.extend({

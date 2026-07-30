@@ -54,7 +54,13 @@ export const findPanditDetailAdmin = `
 
 // ─── Assignments: creation + lookup ──────────────────────────
 
-export const findOrderForAssignment = `SELECT * FROM orders WHERE id = $1`;
+export const findOrderForAssignment = `
+  SELECT o.*, c.requires_pandit
+  FROM orders o
+  JOIN services s ON s.id = o.service_id
+  JOIN categories c ON c.id = s.category_id
+  WHERE o.id = $1
+`;
 
 export const isPanditDoubleBooked = `
   SELECT pa.id FROM pandit_assignments pa

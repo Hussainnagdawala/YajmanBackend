@@ -25,6 +25,7 @@ router.get("/:id", serviceController.getServiceAdmin);
 router.post("/", setUploadFolder, serviceUploads, validate(createServiceSchema), serviceController.createService);
 router.patch("/:id", setUploadFolder, serviceUploads, validate(updateServiceSchema), serviceController.updateService);
 router.delete("/:id", serviceController.deleteService);
+router.delete("/:id/permanent", serviceController.deleteServicePermanently);
 router.post("/:id/images", setUploadFolder, uploadArray("images", 20), serviceController.addServiceImages);
 router.delete("/:id/images/:imageId", serviceController.deleteServiceImage);
 

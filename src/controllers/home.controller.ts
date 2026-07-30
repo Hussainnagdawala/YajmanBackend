@@ -9,6 +9,7 @@ import {
   createPopularSearch as createPopularSearchQuery,
   updatePopularSearch as updatePopularSearchQuery,
   softDeletePopularSearch,
+  hardDeletePopularSearch,
   listActiveBannersByPosition,
   listAllBanners,
   createBanner as createBannerQuery,
@@ -20,11 +21,13 @@ import {
   createTestimonial as createTestimonialQuery,
   updateTestimonial as updateTestimonialQuery,
   softDeleteTestimonial,
+  hardDeleteTestimonial,
   listRecommendedServices,
   listAllRecommendedServices,
   createRecommendedService as createRecommendedServiceQuery,
   updateRecommendedService as updateRecommendedServiceQuery,
   softDeleteRecommendedService,
+  hardDeleteRecommendedService,
   listRecentBlogs,
   getAppSettingsByKeys,
 } from "../queries/home.queries";
@@ -117,6 +120,16 @@ export const deletePopularSearch = async (req: Request, res: Response, next: Nex
     const result = await pool.query(softDeletePopularSearch, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Popular search not found", 404);
     return success(res, result.rows[0], "Popular search deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deletePopularSearchPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeletePopularSearch, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Popular search not found", 404);
+    return success(res, result.rows[0], "Popular search permanently deleted");
   } catch (err) {
     next(err);
   }
@@ -267,6 +280,17 @@ export const deleteTestimonial = async (req: Request, res: Response, next: NextF
   }
 };
 
+export const deleteTestimonialPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteTestimonial, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Testimonial not found", 404);
+    if (result.rows[0].author_avatar_url) await deleteFromS3(result.rows[0].author_avatar_url);
+    return success(res, result.rows[0], "Testimonial permanently deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Admin: recommended services ──────────────────────────────
 
 export const listRecommendedServicesAdmin = async (req: Request, res: Response, next: NextFunction) => {
@@ -311,6 +335,16 @@ export const deleteRecommendedService = async (req: Request, res: Response, next
     const result = await pool.query(softDeleteRecommendedService, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Recommended service not found", 404);
     return success(res, result.rows[0], "Recommended service deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteRecommendedServicePermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteRecommendedService, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Recommended service not found", 404);
+    return success(res, result.rows[0], "Recommended service permanently deleted");
   } catch (err) {
     next(err);
   }

@@ -15,6 +15,7 @@ export const updatePopularSearch = (fields: string[]) => `
   RETURNING *
 `;
 export const softDeletePopularSearch = `UPDATE popular_searches SET is_active = false WHERE id = $1 RETURNING *`;
+export const hardDeletePopularSearch = `DELETE FROM popular_searches WHERE id = $1 RETURNING *`;
 
 // ─── Banners ─────────────────────────────────────────────────
 
@@ -58,6 +59,7 @@ export const updateTestimonial = (fields: string[]) => `
   RETURNING *
 `;
 export const softDeleteTestimonial = `UPDATE testimonials SET is_active = false WHERE id = $1 RETURNING *`;
+export const hardDeleteTestimonial = `DELETE FROM testimonials WHERE id = $1 RETURNING *`;
 
 // ─── Recommended services ────────────────────────────────────
 
@@ -88,6 +90,7 @@ export const updateRecommendedService = (fields: string[]) => `
 export const softDeleteRecommendedService = `
   UPDATE recommended_services SET is_active = false WHERE id = $1 RETURNING *
 `;
+export const hardDeleteRecommendedService = `DELETE FROM recommended_services WHERE id = $1 RETURNING *`;
 
 // ─── Home aggregator reads ───────────────────────────────────
 

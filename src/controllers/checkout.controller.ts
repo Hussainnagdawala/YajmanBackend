@@ -26,8 +26,10 @@ import {
   markPaymentCaptured,
   markPaymentFailed,
   markPaymentRefunded,
+  storeWebhookRawResponse,
 } from "../queries/payment.queries";
 import { insertCouponUsage, incrementCouponUsageCount } from "../queries/coupon.queries";
+import { logOrderActivity } from "../services/booking.service";
 
 interface PgError {
   code?: string;
@@ -94,7 +96,24 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const service = serviceResult.rows[0];
     if (!service) throw new AppError("NOT_FOUND", "Service not found or not available for booking", 404);
 
-    const bookingDateTime = computeBookingDateTime(booking_date, booking_time);
+    if (
+      (service.availability_start_date && booking_date < service.availability_start_date) ||
+      (service.availability_end_date && booking_date > service.availability_end_date)
+    ) {
+      throw new AppError("VALIDATION_ERROR", "Booking date is outside the service's availability period", 400);
+    }
+    if (service.booking_availability_type === "specific_day" && !service.available_dates.includes(booking_date)) {
+      throw new AppError("VALIDATION_ERROR", "Selected date is not available for this service", 400);
+    }
+
+    if (!service.requires_payment) {
+      if (coupon_code) throw new AppError("VALIDATION_ERROR", "Coupons are not applicable to this service", 400);
+      if (addon_ids && addon_ids.length > 0) {
+        throw new AppError("VALIDATION_ERROR", "Addons are not applicable to this service", 400);
+      }
+    }
+
+    const bookingDateTime = computeBookingDateTime(booking_date, booking_time, service.advance_booking_days);
     await assertNoDuplicateBooking(userId, service_id, booking_date);
 
     const requestedAddonIds: string[] = addon_ids ?? [];
@@ -117,12 +136,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     }
     const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
-    const basePrice = Number(service.price);
+    const basePrice = service.requires_payment ? Number(service.price) : 0;
     let discountAmount = 0;
     let couponId: string | null = null;
     let couponCode: string | null = null;
 
-    if (coupon_code) {
+    if (service.requires_payment && coupon_code) {
       const validation = await validateCoupon(coupon_code, userId, basePrice, service_id);
       if (!validation.valid) {
         throw new AppError("COUPON_INVALID", validation.message ?? "Coupon is not valid", 400);
@@ -132,8 +151,11 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       couponCode = validation.coupon!.code;
     }
 
-    const settingResult = await pool.query<{ value: string }>(getAppSettingByKey, ["convenience_fee"]);
-    const convenienceFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
+    let convenienceFee = 0;
+    if (service.requires_payment) {
+      const settingResult = await pool.query<{ value: string }>(getAppSettingByKey, ["convenience_fee"]);
+      convenienceFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
+    }
     // Coupon discount applies to basePrice only — addons are added on top, undiscounted.
     const totalAmount = Math.round((basePrice + addonTotal - discountAmount + convenienceFee) * 100) / 100;
 
@@ -150,6 +172,19 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       selectedAddons
     );
 
+    if (!service.requires_payment) {
+      const confirmed = await pool.query(updateOrderStatus, [order.id, "confirmed"]);
+      return success(
+        res,
+        {
+          order: { id: order.id, order_number: order.order_number, total_amount: totalAmount, status: confirmed.rows[0].status },
+          payment_required: false,
+        },
+        "Order created",
+        201
+      );
+    }
+
     let razorpayOrder;
     try {
       razorpayOrder = await createRazorpayOrder(totalAmount, order.order_number as string, {
@@ -158,6 +193,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       });
     } catch (err) {
       logger.error("Razorpay order creation failed", { err, orderId: order.id });
+      await pool.query(updateOrderStatus, [order.id, "payment_failed"]);
+      await logOrderActivity(userId, "order_payment_init_failed", order.id as string, {
+        description: "Razorpay order creation failed",
+      });
       throw new AppError("PAYMENT_GATEWAY_ERROR", "Failed to initialize payment. Please try again.", 502);
     }
 
@@ -167,6 +206,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       res,
       {
         order: { id: order.id, order_number: order.order_number, total_amount: totalAmount },
+        payment_required: true,
         razorpay: {
           order_id: razorpayOrder.id,
           amount: Math.round(totalAmount * 100),
@@ -251,6 +291,10 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
       await pool.query(markPaymentFailed, [
         payment.id, "SIGNATURE_MISMATCH", "Razorpay signature verification failed", "signature_verification_failed",
       ]);
+      await pool.query(updateOrderStatus, [payment.order_id, "payment_failed"]);
+      await logOrderActivity(req.user!.id, "payment_signature_mismatch", payment.order_id, {
+        description: "Razorpay signature verification failed",
+      });
       throw new AppError("PAYMENT_FAILED", "Payment signature verification failed", 400);
     }
 
@@ -295,6 +339,10 @@ export const razorpayWebhook = async (req: Request, res: Response) => {
         await pool.query(markPaymentFailed, [
           payment.id, entity.error_code ?? null, entity.error_description ?? null, entity.error_reason ?? null,
         ]);
+        await pool.query(updateOrderStatus, [payment.order_id, "payment_failed"]);
+        await logOrderActivity(undefined, "payment_webhook_failed", payment.order_id, {
+          description: `Razorpay reported payment failure: ${entity.error_description ?? entity.error_code ?? "unknown"}`,
+        });
       }
     } else if (event === "refund.created") {
       const entity = req.body.payload?.refund?.entity;
@@ -303,6 +351,21 @@ export const razorpayWebhook = async (req: Request, res: Response) => {
         await pool.query(markPaymentRefunded, [payment.id, entity.amount / 100, entity.id]);
         await pool.query(updateOrderStatus, [payment.order_id, "refunded"]);
       }
+    } else if (event === "payment.dispute.created") {
+      const entity = req.body.payload?.dispute?.entity;
+      const payment = (await pool.query(findPaymentByRazorpayPaymentId, [entity.payment_id])).rows[0];
+      if (payment) {
+        await pool.query(storeWebhookRawResponse, [payment.id, JSON.stringify(entity)]);
+        await pool.query(updateOrderStatus, [payment.order_id, "disputed"]);
+        logger.error("Razorpay payment dispute raised — needs manual handling", {
+          orderId: payment.order_id, paymentId: payment.id, disputeId: entity.id,
+        });
+        await logOrderActivity(undefined, "payment_disputed", payment.order_id, {
+          description: `Razorpay dispute raised (${entity.id}) — respond by the deadline in the Razorpay dashboard`,
+        });
+      }
+    } else {
+      logger.warn("Unhandled Razorpay webhook event", { event });
     }
 
     return success(res, null, "Webhook processed");

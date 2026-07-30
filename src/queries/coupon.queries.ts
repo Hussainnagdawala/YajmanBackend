@@ -22,6 +22,9 @@ export const updateCoupon = (fields: string[]) => `
 export const softDeleteCoupon = `
   UPDATE coupons SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
 `;
+export const hardDeleteCoupon = `DELETE FROM coupons WHERE id = $1 RETURNING *`;
+export const countCouponUsagesByCoupon = `SELECT COUNT(*)::int AS count FROM coupon_usages WHERE coupon_id = $1`;
+export const countOrdersByCoupon = `SELECT COUNT(*)::int AS count FROM orders WHERE coupon_id = $1`;
 
 export const findServiceForCoupon = `SELECT id, category_id FROM services WHERE id = $1`;
 

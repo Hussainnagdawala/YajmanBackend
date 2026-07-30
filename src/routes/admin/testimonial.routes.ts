@@ -15,5 +15,6 @@ router.post("/", setUploadFolder, uploadSingle("avatar"), validate(createTestimo
 router.get("/", homeController.listTestimonialsAdmin);
 router.patch("/:id", setUploadFolder, uploadSingle("avatar"), validate(updateTestimonialSchema), homeController.updateTestimonial);
 router.delete("/:id", homeController.deleteTestimonial);
+router.delete("/:id/permanent", homeController.deleteTestimonialPermanently);
 
 export default router;

@@ -9,5 +9,6 @@ router.post("/", validate(createBlogCategorySchema), blogController.createBlogCa
 router.get("/", blogController.listBlogCategoriesAdmin);
 router.patch("/:id", validate(updateBlogCategorySchema), blogController.updateBlogCategory);
 router.delete("/:id", blogController.deleteBlogCategory);
+router.delete("/:id/permanent", blogController.deleteBlogCategoryPermanently);
 
 export default router;

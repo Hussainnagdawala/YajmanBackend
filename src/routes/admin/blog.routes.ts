@@ -20,5 +20,6 @@ router.post("/", setUploadFolder, blogUploads, validate(createBlogSchema), blogC
 router.get("/", blogController.listBlogsAdmin);
 router.patch("/:id", setUploadFolder, blogUploads, validate(updateBlogSchema), blogController.updateBlog);
 router.delete("/:id", blogController.deleteBlog);
+router.delete("/:id/permanent", blogController.deleteBlogPermanently);
 
 export default router;

@@ -50,10 +50,15 @@ export const findCategoryById = `
 `;
 
 export const createCategory = `
-  INSERT INTO categories (name, slug, description, image_url, icon_url, display_order, meta_title, meta_description)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  INSERT INTO categories (
+    name, slug, description, image_url, icon_url, display_order, meta_title, meta_description,
+    requires_pandit, requires_payment
+  )
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
   RETURNING *
 `;
+
+export const findCategoryFlags = `SELECT requires_pandit, requires_payment FROM categories WHERE id = $1`;
 
 export const updateCategory = (fields: string[]) => `
   UPDATE categories SET ${fields.map((f, i) => `${f} = $${i + 2}`).join(", ")}, updated_at = NOW()
@@ -66,6 +71,7 @@ export const softDeleteCategory = `
 `;
 
 export const countServicesByCategory = `SELECT COUNT(*)::int AS count FROM services WHERE category_id = $1`;
+export const hardDeleteCategory = `DELETE FROM categories WHERE id = $1 RETURNING *`;
 
 export const setCategoryTypes = `
   INSERT INTO category_types (category_id, type_id)
@@ -100,6 +106,8 @@ export const updateType = (fields: string[]) => `
 export const softDeleteType = `
   UPDATE types SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
 `;
+export const hardDeleteType = `DELETE FROM types WHERE id = $1 RETURNING *`;
+export const countServicesByType = `SELECT COUNT(*)::int AS count FROM services WHERE type_id = $1`;
 
 // ─── Tags ───────────────────────────────────────────────────
 
@@ -122,3 +130,4 @@ export const updateTag = (fields: string[]) => `
 `;
 
 export const softDeleteTag = `UPDATE tags SET is_active = false WHERE id = $1 RETURNING *`;
+export const hardDeleteTag = `DELETE FROM tags WHERE id = $1 RETURNING *`;

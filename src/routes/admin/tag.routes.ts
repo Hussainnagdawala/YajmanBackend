@@ -9,5 +9,6 @@ router.post("/", validate(createTagSchema), tagController.createTag);
 router.get("/", tagController.listTagsAdmin);
 router.patch("/:id", validate(updateTagSchema), tagController.updateTag);
 router.delete("/:id", tagController.deleteTag);
+router.delete("/:id/permanent", tagController.deleteTagPermanently);
 
 export default router;

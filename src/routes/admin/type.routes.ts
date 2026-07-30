@@ -15,5 +15,6 @@ router.post("/", setUploadFolder, uploadSingle("image"), validate(createTypeSche
 router.get("/", typeController.listTypesAdmin);
 router.patch("/:id", setUploadFolder, uploadSingle("image"), validate(updateTypeSchema), typeController.updateType);
 router.delete("/:id", typeController.deleteType);
+router.delete("/:id/permanent", typeController.deleteTypePermanently);
 
 export default router;

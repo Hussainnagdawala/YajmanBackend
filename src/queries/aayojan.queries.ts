@@ -17,6 +17,7 @@ export const updateAayojanContent = (fields: string[]) => `
 export const softDeleteAayojanContent = `
   UPDATE aayojan_page_content SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
 `;
+export const hardDeleteAayojanContent = `DELETE FROM aayojan_page_content WHERE id = $1 RETURNING *`;
 
 // ─── Events ──────────────────────────────────────────────────
 
@@ -54,6 +55,10 @@ export const updateAayojanEvent = (fields: string[]) => `
 export const softDeleteAayojanEvent = `
   UPDATE aayojan_events SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
 `;
+export const hardDeleteAayojanEvent = `DELETE FROM aayojan_events WHERE id = $1 RETURNING *`;
+export const countOrdersByAayojanEvent = `SELECT COUNT(*)::int AS count FROM orders WHERE aayojan_event_id = $1`;
+// Fetch gallery URLs before the hard delete cascades aayojan_event_images away.
+export const findAayojanEventImageUrls = `SELECT image_url FROM aayojan_event_images WHERE event_id = $1`;
 
 export const insertAayojanEventImage = `
   INSERT INTO aayojan_event_images (event_id, image_url, display_order)
@@ -81,3 +86,4 @@ export const updateAayojanBanner = (fields: string[]) => `
   RETURNING *
 `;
 export const softDeleteAayojanBanner = `UPDATE aayojan_banners SET is_active = false WHERE id = $1 RETURNING *`;
+export const hardDeleteAayojanBanner = `DELETE FROM aayojan_banners WHERE id = $1 RETURNING *`;

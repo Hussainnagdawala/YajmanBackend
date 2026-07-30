@@ -37,6 +37,7 @@ router.patch(
   aayojanController.updateAayojanContent
 );
 router.delete("/content/:id", aayojanController.deleteAayojanContent);
+router.delete("/content/:id/permanent", aayojanController.deleteAayojanContentPermanently);
 
 // ─── Events ──────────────────────────────────────────────────
 const eventUploads = uploadFields([
@@ -60,6 +61,7 @@ router.patch(
   aayojanController.updateAayojanEvent
 );
 router.delete("/events/:id", aayojanController.deleteAayojanEvent);
+router.delete("/events/:id/permanent", aayojanController.deleteAayojanEventPermanently);
 
 // ─── Banners ─────────────────────────────────────────────────
 
@@ -79,5 +81,6 @@ router.patch(
   aayojanController.updateAayojanBanner
 );
 router.delete("/banners/:id", aayojanController.deleteAayojanBanner);
+router.delete("/banners/:id/permanent", aayojanController.deleteAayojanBannerPermanently);
 
 export default router;

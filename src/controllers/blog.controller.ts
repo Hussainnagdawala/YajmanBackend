@@ -5,11 +5,14 @@ import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
+import { deleteFromS3 } from "../services/upload.service";
 import {
   listAllBlogCategories,
   createBlogCategory as createBlogCategoryQuery,
   updateBlogCategory as updateBlogCategoryQuery,
   softDeleteBlogCategory,
+  hardDeleteBlogCategory,
+  countBlogsByCategory,
   listAllBlogAuthors,
   createBlogAuthor as createBlogAuthorQuery,
   updateBlogAuthor as updateBlogAuthorQuery,
@@ -18,6 +21,8 @@ import {
   updateBlog as updateBlogQuery,
   findBlogById,
   softDeleteBlog,
+  hardDeleteBlog,
+  findBlogImageUrls,
   listBlogs as listBlogsQuery,
   countBlogs,
   listBlogsAdmin as listBlogsAdminQuery,
@@ -73,6 +78,20 @@ export const deleteBlogCategory = async (req: Request, res: Response, next: Next
     const result = await pool.query(softDeleteBlogCategory, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Blog category not found", 404);
     return success(res, result.rows[0], "Blog category deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteBlogCategoryPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const linked = await pool.query<{ count: number }>(countBlogsByCategory, [req.params.id]);
+    if (linked.rows[0].count > 0) {
+      throw new AppError("CONFLICT", "Cannot delete blog category with linked blogs", 409);
+    }
+    const result = await pool.query(hardDeleteBlogCategory, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Blog category not found", 404);
+    return success(res, result.rows[0], "Blog category permanently deleted");
   } catch (err) {
     next(err);
   }
@@ -317,6 +336,19 @@ export const deleteBlog = async (req: Request, res: Response, next: NextFunction
     const result = await pool.query(softDeleteBlog, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Blog not found", 404);
     return success(res, result.rows[0], "Blog deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteBlogPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const galleryUrls = (await pool.query<{ image_url: string }>(findBlogImageUrls, [req.params.id])).rows;
+    const result = await pool.query(hardDeleteBlog, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Blog not found", 404);
+    if (result.rows[0].feature_image_url) await deleteFromS3(result.rows[0].feature_image_url);
+    for (const row of galleryUrls) await deleteFromS3(row.image_url);
+    return success(res, result.rows[0], "Blog permanently deleted");
   } catch (err) {
     next(err);
   }

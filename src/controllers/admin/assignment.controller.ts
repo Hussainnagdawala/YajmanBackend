@@ -16,7 +16,10 @@ import {
   countAssignmentsAdmin,
 } from "../../queries/pandit.queries";
 
-const NON_ASSIGNABLE_ORDER_STATUSES = ["cancelled", "completed", "refunded"];
+// Deliberately an allow-list, not a deny-list: assigning a pandit only makes
+// sense once payment is actually confirmed. A 'pending' (unpaid) order is
+// not assignable even though it isn't in any "closed" status.
+const ASSIGNABLE_ORDER_STATUSES = ["confirmed"];
 const RESPOND_WINDOW_HOURS = 48;
 
 export const createAssignment = async (req: Request, res: Response, next: NextFunction) => {
@@ -26,8 +29,11 @@ export const createAssignment = async (req: Request, res: Response, next: NextFu
     const orderResult = await pool.query(findOrderForAssignment, [order_id]);
     const order = orderResult.rows[0];
     if (!order) throw new AppError("NOT_FOUND", "Order not found", 404);
-    if (NON_ASSIGNABLE_ORDER_STATUSES.includes(order.status)) {
+    if (!ASSIGNABLE_ORDER_STATUSES.includes(order.status)) {
       throw new AppError("VALIDATION_ERROR", `Cannot assign a pandit to an order with status '${order.status}'`, 400);
+    }
+    if (!order.requires_pandit) {
+      throw new AppError("VALIDATION_ERROR", "This order's category does not require pandit assignment", 400);
     }
 
     const panditResult = await pool.query(findPanditProfileById, [pandit_id]);
@@ -99,6 +105,12 @@ export const reassignPandit = async (req: Request, res: Response, next: NextFunc
 
     const orderResult = await pool.query(findOrderForAssignment, [assignment.order_id]);
     const order = orderResult.rows[0];
+    if (!order.requires_pandit) {
+      throw new AppError("VALIDATION_ERROR", "This order's category does not require pandit assignment", 400);
+    }
+    if (!["pandit_assigned", "in_progress"].includes(order.status)) {
+      throw new AppError("VALIDATION_ERROR", `Cannot reassign a pandit for an order with status '${order.status}'`, 400);
+    }
 
     const conflict = await pool.query(isPanditDoubleBooked, [pandit_id, order.booking_date, order.booking_time, assignment.id]);
     if (conflict.rows.length > 0) {

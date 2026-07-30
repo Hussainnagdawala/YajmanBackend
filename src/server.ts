@@ -4,9 +4,11 @@ import { logger } from "./config/logger";
 import { pool } from "./config/database";
 import { initFirebase } from "./config/firebase";
 import { startNotificationCron } from "./jobs/notification.cron";
+import { startOrderExpiryCron } from "./jobs/order-expiry.cron";
 
 initFirebase();
 startNotificationCron();
+startOrderExpiryCron();
 
 const server = app.listen(env.PORT, () => {
   logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`);

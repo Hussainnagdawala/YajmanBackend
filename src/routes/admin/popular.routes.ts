@@ -9,5 +9,6 @@ router.post("/", validate(createPopularSearchSchema), homeController.createPopul
 router.get("/", homeController.listPopularSearchesAdmin);
 router.patch("/:id", validate(updatePopularSearchSchema), homeController.updatePopularSearch);
 router.delete("/:id", homeController.deletePopularSearch);
+router.delete("/:id/permanent", homeController.deletePopularSearchPermanently);
 
 export default router;

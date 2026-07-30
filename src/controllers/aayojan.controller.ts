@@ -3,12 +3,14 @@ import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { generateUniqueSlug } from "../services/slug.service";
+import { deleteFromS3 } from "../services/upload.service";
 import {
   listActiveAayojanContent,
   listAllAayojanContent,
   createAayojanContent as createAayojanContentQuery,
   updateAayojanContent as updateAayojanContentQuery,
   softDeleteAayojanContent,
+  hardDeleteAayojanContent,
   listActiveAayojanEvents,
   listAllAayojanEvents,
   findAayojanEventById,
@@ -16,6 +18,9 @@ import {
   createAayojanEvent as createAayojanEventQuery,
   updateAayojanEvent as updateAayojanEventQuery,
   softDeleteAayojanEvent,
+  hardDeleteAayojanEvent,
+  countOrdersByAayojanEvent,
+  findAayojanEventImageUrls,
   insertAayojanEventImage,
   maxAayojanEventImageOrder,
   listActiveAayojanBanners,
@@ -23,6 +28,7 @@ import {
   createAayojanBanner as createAayojanBannerQuery,
   updateAayojanBanner as updateAayojanBannerQuery,
   softDeleteAayojanBanner,
+  hardDeleteAayojanBanner,
 } from "../queries/aayojan.queries";
 import { listActiveTestimonials } from "../queries/home.queries";
 
@@ -115,6 +121,17 @@ export const deleteAayojanContent = async (req: Request, res: Response, next: Ne
     const result = await pool.query(softDeleteAayojanContent, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Aayojan content not found", 404);
     return success(res, result.rows[0], "Aayojan content deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteAayojanContentPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteAayojanContent, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Aayojan content not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    return success(res, result.rows[0], "Aayojan content permanently deleted");
   } catch (err) {
     next(err);
   }
@@ -214,6 +231,23 @@ export const deleteAayojanEvent = async (req: Request, res: Response, next: Next
   }
 };
 
+export const deleteAayojanEventPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const linked = await pool.query<{ count: number }>(countOrdersByAayojanEvent, [req.params.id]);
+    if (linked.rows[0].count > 0) {
+      throw new AppError("CONFLICT", "Cannot delete event with linked orders", 409);
+    }
+    const galleryUrls = (await pool.query<{ image_url: string }>(findAayojanEventImageUrls, [req.params.id])).rows;
+    const result = await pool.query(hardDeleteAayojanEvent, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Event not found", 404);
+    if (result.rows[0].feature_image_url) await deleteFromS3(result.rows[0].feature_image_url);
+    for (const row of galleryUrls) await deleteFromS3(row.image_url);
+    return success(res, result.rows[0], "Event permanently deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Admin: banners ────────────────────────────────────────────
 
 export const listAayojanBannersAdmin = async (_req: Request, res: Response, next: NextFunction) => {
@@ -266,6 +300,17 @@ export const deleteAayojanBanner = async (req: Request, res: Response, next: Nex
     const result = await pool.query(softDeleteAayojanBanner, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Aayojan banner not found", 404);
     return success(res, result.rows[0], "Aayojan banner deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteAayojanBannerPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteAayojanBanner, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Aayojan banner not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    return success(res, result.rows[0], "Aayojan banner permanently deleted");
   } catch (err) {
     next(err);
   }

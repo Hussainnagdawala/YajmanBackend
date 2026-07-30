@@ -7,8 +7,8 @@ export const listAllAddons = `SELECT * FROM addons ORDER BY display_order, name`
 export const findAddonById = `SELECT * FROM addons WHERE id = $1`;
 
 export const createAddon = `
-  INSERT INTO addons (name, slug, image_url, price, display_order)
-  VALUES ($1, $2, $3, $4, $5)
+  INSERT INTO addons (name, slug, image_url, price, display_order, is_free)
+  VALUES ($1, $2, $3, $4, $5, $6)
   RETURNING *
 `;
 
@@ -21,6 +21,8 @@ export const updateAddon = (fields: string[]) => `
 export const softDeleteAddon = `
   UPDATE addons SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
 `;
+
+export const hardDeleteAddon = `DELETE FROM addons WHERE id = $1 RETURNING *`;
 
 // ─── Service <-> addon junction (standalone — no relation to service_types/tags) ───
 

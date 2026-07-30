@@ -9,5 +9,6 @@ router.post("/", validate(createRecommendedServiceSchema), homeController.create
 router.get("/", homeController.listRecommendedServicesAdmin);
 router.patch("/:id", validate(updateRecommendedServiceSchema), homeController.updateRecommendedService);
 router.delete("/:id", homeController.deleteRecommendedService);
+router.delete("/:id/permanent", homeController.deleteRecommendedServicePermanently);
 
 export default router;

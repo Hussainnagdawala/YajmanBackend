@@ -15,6 +15,8 @@ export const updateBlogCategory = (fields: string[]) => `
   RETURNING *
 `;
 export const softDeleteBlogCategory = `UPDATE blog_categories SET is_active = false WHERE id = $1 RETURNING *`;
+export const hardDeleteBlogCategory = `DELETE FROM blog_categories WHERE id = $1 RETURNING *`;
+export const countBlogsByCategory = `SELECT COUNT(*)::int AS count FROM blogs WHERE category_id = $1`;
 
 // ─── Blog authors ────────────────────────────────────────────
 
@@ -50,6 +52,10 @@ export const updateBlog = (fields: string[]) => `
 export const findBlogById = `SELECT * FROM blogs WHERE id = $1`;
 
 export const softDeleteBlog = `UPDATE blogs SET status = 'archived', updated_at = NOW() WHERE id = $1 RETURNING *`;
+export const hardDeleteBlog = `DELETE FROM blogs WHERE id = $1 RETURNING *`;
+// Fetch gallery URLs before the hard delete cascades blog_images away, so the
+// controller can still clean up the files from disk afterward.
+export const findBlogImageUrls = `SELECT image_url FROM blog_images WHERE blog_id = $1`;
 
 // ─── Blogs: public listing + detail ──────────────────────────
 

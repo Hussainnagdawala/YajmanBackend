@@ -1,7 +1,7 @@
 const STATUS_GROUPS: Record<string, string> = {
   upcoming: "o.status IN ('confirmed', 'pandit_assigned', 'in_progress') AND o.booking_date >= CURRENT_DATE",
   completed: "o.status = 'completed'",
-  cancelled: "o.status IN ('cancelled', 'refunded')",
+  cancelled: "o.status IN ('cancelled', 'refunded', 'payment_failed', 'refund_failed')",
 };
 
 export const listBookings = (statusGroup: string | undefined, limitIdx: number, offsetIdx: number) => `
@@ -57,12 +57,14 @@ export const findBookingDetail = `
 
 export const findBookingById = `SELECT * FROM orders WHERE id = $1`;
 
-export const cancelBooking = `
+// $2 is the terminal status to land on: 'cancelled' (no captured payment to
+// refund), 'refunded' (refund succeeded), or 'refund_failed' (refund threw).
+export const finalizeCancellation = `
   UPDATE orders SET
-    status = 'cancelled',
+    status = $2,
     cancelled_at = NOW(),
-    cancellation_reason = $2,
-    cancelled_by = $3,
+    cancellation_reason = $3,
+    cancelled_by = $4,
     updated_at = NOW()
   WHERE id = $1
   RETURNING *

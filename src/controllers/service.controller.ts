@@ -6,12 +6,17 @@ import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
+import { findCategoryFlags } from "../queries/category.queries";
 import {
   createService as createServiceQuery,
   updateService as updateServiceQuery,
   findServiceById,
   findServiceByIdDetail,
   softDeleteService,
+  hardDeleteService,
+  countContactEntriesByService,
+  countOrdersByService,
+  findServiceImageUrls,
   listServices as listServicesQuery,
   countServices,
   listBestsellers,
@@ -22,8 +27,6 @@ import {
   setServiceTags,
   clearServiceTemples,
   setServiceTemples,
-  clearKeyFeatures,
-  insertKeyFeature,
   clearPackages,
   insertPackage,
   clearFaqs,
@@ -36,16 +39,12 @@ import {
   createTemple as createTempleQuery,
   updateTemple as updateTempleQuery,
   softDeleteTemple,
+  hardDeleteTemple,
 } from "../queries/service.queries";
 import { clearServiceAddons, setServiceAddons } from "../queries/addon.queries";
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
 
-interface KeyFeatureInput {
-  title: string;
-  description?: string;
-  icon_url?: string;
-}
 interface PackageInput {
   title: string;
   description?: string;
@@ -62,7 +61,6 @@ interface ServiceRelations {
   tag_ids?: string[];
   temple_ids?: string[];
   addon_ids?: string[];
-  key_features?: KeyFeatureInput[];
   packages?: PackageInput[];
   faqs?: FaqInput[];
 }
@@ -89,12 +87,6 @@ const replaceServiceRelations = async (
   if (relations.addon_ids !== undefined) {
     await client.query(clearServiceAddons, [serviceId]);
     if (relations.addon_ids.length > 0) await client.query(setServiceAddons, [serviceId, relations.addon_ids]);
-  }
-  if (relations.key_features !== undefined) {
-    await client.query(clearKeyFeatures, [serviceId]);
-    for (const [i, kf] of relations.key_features.entries()) {
-      await client.query(insertKeyFeature, [serviceId, kf.title, kf.description ?? null, kf.icon_url ?? null, i]);
-    }
   }
   if (relations.packages !== undefined) {
     await client.query(clearPackages, [serviceId]);
@@ -134,7 +126,6 @@ export const listServicesPublic = async (req: Request, res: Response, next: Next
       sort?: string;
       is_featured?: boolean;
       is_bestseller?: boolean;
-      city?: string;
     };
 
     const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
@@ -184,10 +175,6 @@ export const listServicesPublic = async (req: Request, res: Response, next: Next
     if (q.is_bestseller !== undefined) {
       values.push(q.is_bestseller);
       whereClauses.push(`s.is_bestseller = $${values.length}`);
-    }
-    if (q.city) {
-      values.push(q.city);
-      whereClauses.push(`s.city = $${values.length}`);
     }
 
     const sortMap: Record<string, string> = {
@@ -323,10 +310,21 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     const {
       title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, benefits, price, original_price,
       short_description, about_puja, description, custom_content,
-      location, city, state, pincode, latitude, longitude, video_url,
-      duration_minutes, advance_booking_hours, is_featured, is_bestseller,
+      pincode, latitude, longitude, video_url,
+      duration_minutes, advance_booking_days, is_featured, is_bestseller,
       display_order, meta_title, meta_description, key_features, packages, faqs,
+      availability_start_date, availability_end_date, booking_availability_type, available_dates,
     } = req.body;
+
+    const categoryFlags = await pool.query(findCategoryFlags, [category_id]);
+    if (!categoryFlags.rows[0]) throw new AppError("NOT_FOUND", "Category not found", 404);
+    const { requires_payment, requires_pandit } = categoryFlags.rows[0];
+
+    if (requires_payment && !(price && price > 0)) {
+      throw new AppError("VALIDATION_ERROR", "This category requires a price", 400);
+    }
+    const finalPrice = requires_payment ? price : null;
+    const finalIsAddonAvailable = requires_pandit ? is_addon_available : false;
 
     const slug = await generateUniqueSlug(title, "services");
     const sanitizedContent = custom_content ? DOMPurify.sanitize(custom_content) : null;
@@ -334,16 +332,17 @@ export const createService = async (req: Request, res: Response, next: NextFunct
 
     await client.query("BEGIN");
     const result = await client.query(createServiceQuery, [
-      title, slug, category_id, primaryTypeId, price, original_price ?? null,
+      title, slug, category_id, primaryTypeId, finalPrice, original_price ?? null,
       short_description ?? null, about_puja ?? null, description ?? null, sanitizedContent,
-      location ?? null, city ?? null, state ?? null, pincode ?? null, latitude ?? null, longitude ?? null,
-      featureImage.location || null, video_url ?? null, duration_minutes ?? null, advance_booking_hours,
+      pincode ?? null, latitude ?? null, longitude ?? null,
+      featureImage.location || null, video_url ?? null, duration_minutes ?? null, advance_booking_days,
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
-      is_addon_available, benefits,
+      finalIsAddonAvailable, benefits, key_features,
+      availability_start_date ?? null, availability_end_date ?? null, booking_availability_type, available_dates,
     ]);
     const service = result.rows[0];
 
-    await replaceServiceRelations(client, service.id, { type_ids, tag_ids, temple_ids, addon_ids, key_features, packages, faqs });
+    await replaceServiceRelations(client, service.id, { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs });
 
     if (files?.images && files.images.length > 0) {
       for (const [i, img] of files.images.entries()) {
@@ -369,7 +368,7 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     const existing = await client.query(findServiceById, [req.params.id]);
     if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
 
-    const { type_ids, tag_ids, temple_ids, addon_ids, key_features, packages, faqs, custom_content, ...rest } = req.body;
+    const { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs, custom_content, ...rest } = req.body;
     const files = req.files as MulterS3Files | undefined;
 
     const fields: string[] = [];
@@ -396,13 +395,39 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       values.push(files.feature_image[0].location);
     }
 
+    const effectiveCategoryId = rest.category_id ?? existing.rows[0].category_id;
+    const categoryFlags = await pool.query(findCategoryFlags, [effectiveCategoryId]);
+    if (!categoryFlags.rows[0]) throw new AppError("NOT_FOUND", "Category not found", 404);
+    const { requires_payment, requires_pandit } = categoryFlags.rows[0];
+
+    const setField = (field: string, value: unknown) => {
+      const idx = fields.indexOf(field);
+      if (idx >= 0) values[idx] = value;
+      else {
+        fields.push(field);
+        values.push(value);
+      }
+    };
+
+    if (requires_payment) {
+      const effectivePrice = rest.price !== undefined ? rest.price : existing.rows[0].price;
+      if (!(effectivePrice && effectivePrice > 0)) {
+        throw new AppError("VALIDATION_ERROR", "This category requires a price", 400);
+      }
+    } else {
+      setField("price", null);
+    }
+    if (!requires_pandit) {
+      setField("is_addon_available", false);
+    }
+
     await client.query("BEGIN");
 
     if (fields.length > 0) {
       await client.query(updateServiceQuery(fields), [req.params.id, ...values]);
     }
 
-    await replaceServiceRelations(client, req.params.id, { type_ids, tag_ids, temple_ids, addon_ids, key_features, packages, faqs });
+    await replaceServiceRelations(client, req.params.id, { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs });
 
     if (files?.images && files.images.length > 0) {
       const maxOrder = await client.query<{ max_order: number }>(maxServiceImageOrder, [req.params.id]);
@@ -430,6 +455,26 @@ export const deleteService = async (req: Request, res: Response, next: NextFunct
     const result = await pool.query(softDeleteService, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
     return success(res, result.rows[0], "Service deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteServicePermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [contactEntries, orders] = await Promise.all([
+      pool.query<{ count: number }>(countContactEntriesByService, [req.params.id]),
+      pool.query<{ count: number }>(countOrdersByService, [req.params.id]),
+    ]);
+    if (contactEntries.rows[0].count > 0 || orders.rows[0].count > 0) {
+      throw new AppError("CONFLICT", "Cannot delete service with linked contact entries or orders", 409);
+    }
+    const galleryUrls = (await pool.query<{ image_url: string }>(findServiceImageUrls, [req.params.id])).rows;
+    const result = await pool.query(hardDeleteService, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
+    if (result.rows[0].feature_image_url) await deleteFromS3(result.rows[0].feature_image_url);
+    for (const row of galleryUrls) await deleteFromS3(row.image_url);
+    return success(res, result.rows[0], "Service permanently deleted");
   } catch (err) {
     next(err);
   }
@@ -487,9 +532,10 @@ export const createTemple = async (req: Request, res: Response, next: NextFuncti
   try {
     const { name, description, address, city, state, latitude, longitude } = req.body;
     const slug = await generateUniqueSlug(name, "temples");
+    const imageUrl = (req.file as Express.MulterS3.File | undefined)?.location ?? null;
 
     const result = await pool.query(createTempleQuery, [
-      name, slug, description ?? null, address ?? null, city ?? null, state ?? null, latitude ?? null, longitude ?? null,
+      name, slug, description ?? null, address ?? null, city ?? null, state ?? null, latitude ?? null, longitude ?? null, imageUrl,
     ]);
     return success(res, result.rows[0], "Temple created", 201);
   } catch (err) {
@@ -510,6 +556,11 @@ export const updateTemple = async (req: Request, res: Response, next: NextFuncti
       fields.push("slug");
       values.push(newSlug);
     }
+    const file = req.file as Express.MulterS3.File | undefined;
+    if (file) {
+      fields.push("image_url");
+      values.push(file.location);
+    }
     if (fields.length === 0) throw new AppError("VALIDATION_ERROR", "No fields to update", 400);
 
     const result = await pool.query(updateTempleQuery(fields), [req.params.id, ...values]);
@@ -525,6 +576,17 @@ export const deleteTemple = async (req: Request, res: Response, next: NextFuncti
     const result = await pool.query(softDeleteTemple, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Temple not found", 404);
     return success(res, result.rows[0], "Temple deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteTemplePermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteTemple, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Temple not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    return success(res, result.rows[0], "Temple permanently deleted");
   } catch (err) {
     next(err);
   }

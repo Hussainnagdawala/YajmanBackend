@@ -8,6 +8,9 @@ import {
   createCoupon as createCouponQuery,
   updateCoupon as updateCouponQuery,
   softDeleteCoupon,
+  hardDeleteCoupon,
+  countCouponUsagesByCoupon,
+  countOrdersByCoupon,
 } from "../queries/coupon.queries";
 
 export const listCouponsAdmin = async (_req: Request, res: Response, next: NextFunction) => {
@@ -57,6 +60,23 @@ export const deleteCoupon = async (req: Request, res: Response, next: NextFuncti
     const result = await pool.query(softDeleteCoupon, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Coupon not found", 404);
     return success(res, result.rows[0], "Coupon deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteCouponPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [usages, orders] = await Promise.all([
+      pool.query<{ count: number }>(countCouponUsagesByCoupon, [req.params.id]),
+      pool.query<{ count: number }>(countOrdersByCoupon, [req.params.id]),
+    ]);
+    if (usages.rows[0].count > 0 || orders.rows[0].count > 0) {
+      throw new AppError("CONFLICT", "Cannot delete coupon with linked usage or orders", 409);
+    }
+    const result = await pool.query(hardDeleteCoupon, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Coupon not found", 404);
+    return success(res, result.rows[0], "Coupon permanently deleted");
   } catch (err) {
     next(err);
   }

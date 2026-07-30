@@ -5,7 +5,7 @@ export const countOrdersToday = `
 export const findDuplicateBooking = `
   SELECT id FROM orders
   WHERE user_id = $1 AND service_id = $2 AND booking_date = $3
-    AND status NOT IN ('cancelled', 'refunded')
+    AND status NOT IN ('cancelled', 'refunded', 'payment_failed', 'refund_failed')
 `;
 
 export const createOrder = `
@@ -102,6 +102,31 @@ export const updateOrderStatusAdmin = `
   UPDATE orders SET status = $2, admin_notes = COALESCE($3, admin_notes), updated_at = NOW()
   WHERE id = $1
   RETURNING *
+`;
+
+// Bulk-expires checkout attempts nobody ever completed payment for — run by
+// the order-expiry cron. Excludes 'created' payments too since a Razorpay
+// order was opened but never paid.
+export const expireStalePendingOrders = `
+  UPDATE orders SET status = 'payment_failed', updated_at = NOW()
+  WHERE status = 'pending' AND created_at < NOW() - INTERVAL '30 minutes'
+  RETURNING id
+`;
+
+export const markStalePaymentsFailed = `
+  UPDATE payments SET
+    status = 'failed', error_code = 'EXPIRED',
+    error_description = 'Payment window expired', error_reason = 'timeout',
+    updated_at = NOW()
+  WHERE order_id = ANY($1::uuid[]) AND status IN ('pending', 'created')
+  RETURNING id
+`;
+
+export const getOrderActivity = `
+  SELECT id, entity_id AS order_id, action AS event, new_data->>'description' AS description, created_at
+  FROM activity_logs
+  WHERE entity_type = 'order' AND entity_id = $1
+  ORDER BY created_at DESC
 `;
 
 // ─── Admin: dashboard ─────────────────────────────────────────

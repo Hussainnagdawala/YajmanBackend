@@ -3,6 +3,7 @@ import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { generateUniqueSlug } from "../services/slug.service";
+import { deleteFromS3 } from "../services/upload.service";
 import {
   listActiveCategories,
   listAllCategories,
@@ -10,6 +11,7 @@ import {
   createCategory as createCategoryQuery,
   updateCategory as updateCategoryQuery,
   softDeleteCategory,
+  hardDeleteCategory,
   countServicesByCategory,
   setCategoryTypes,
   clearCategoryTypes,
@@ -47,7 +49,7 @@ export const getCategory = async (req: Request, res: Response, next: NextFunctio
 
 export const createCategory = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, description, type_ids, display_order, meta_title, meta_description } = req.body;
+    const { name, description, type_ids, display_order, meta_title, meta_description, requires_pandit, requires_payment } = req.body;
     const files = req.files as MulterS3Files | undefined;
     const imageUrl = files?.image?.[0]?.location ?? null;
     const iconUrl = files?.icon?.[0]?.location ?? null;
@@ -63,6 +65,8 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
       display_order ?? 0,
       meta_title ?? null,
       meta_description ?? null,
+      requires_pandit,
+      requires_payment,
     ]);
     const category = result.rows[0];
 
@@ -136,6 +140,23 @@ export const deleteCategory = async (req: Request, res: Response, next: NextFunc
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Category not found", 404);
 
     return success(res, result.rows[0], "Category deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteCategoryPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const linked = await pool.query<{ count: number }>(countServicesByCategory, [req.params.id]);
+    if (linked.rows[0].count > 0) {
+      throw new AppError("CONFLICT", "Cannot delete category with linked services", 409);
+    }
+
+    const result = await pool.query(hardDeleteCategory, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Category not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    if (result.rows[0].icon_url) await deleteFromS3(result.rows[0].icon_url);
+    return success(res, result.rows[0], "Category permanently deleted");
   } catch (err) {
     next(err);
   }

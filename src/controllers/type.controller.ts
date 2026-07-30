@@ -3,12 +3,15 @@ import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { generateUniqueSlug } from "../services/slug.service";
+import { deleteFromS3 } from "../services/upload.service";
 import {
   listActiveTypes,
   listAllTypes,
   createType as createTypeQuery,
   updateType as updateTypeQuery,
   softDeleteType,
+  hardDeleteType,
+  countServicesByType,
 } from "../queries/category.queries";
 
 export const listTypes = async (_req: Request, res: Response, next: NextFunction) => {
@@ -77,6 +80,21 @@ export const deleteType = async (req: Request, res: Response, next: NextFunction
     const result = await pool.query(softDeleteType, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Type not found", 404);
     return success(res, result.rows[0], "Type deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteTypePermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const linked = await pool.query<{ count: number }>(countServicesByType, [req.params.id]);
+    if (linked.rows[0].count > 0) {
+      throw new AppError("CONFLICT", "Cannot delete type with linked services", 409);
+    }
+    const result = await pool.query(hardDeleteType, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Type not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    return success(res, result.rows[0], "Type permanently deleted");
   } catch (err) {
     next(err);
   }

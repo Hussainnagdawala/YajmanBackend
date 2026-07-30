@@ -4,17 +4,19 @@ export const createService = `
   INSERT INTO services (
     title, slug, category_id, type_id, price, original_price,
     short_description, about_puja, description, custom_content,
-    location, city, state, pincode, latitude, longitude,
-    feature_image_url, video_url, duration_minutes, advance_booking_hours,
+    pincode, latitude, longitude,
+    feature_image_url, video_url, duration_minutes, advance_booking_days,
     is_featured, is_bestseller, display_order, meta_title, meta_description, created_by,
-    is_addon_available, benefits
+    is_addon_available, benefits, key_features,
+    availability_start_date, availability_end_date, booking_availability_type, available_dates
   ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10,
-    $11, $12, $13, $14, $15, $16,
-    $17, $18, $19, $20,
-    $21, $22, $23, $24, $25, $26,
-    $27, $28
+    $11, $12, $13,
+    $14, $15, $16, $17,
+    $18, $19, $20, $21, $22, $23,
+    $24, $25, $26,
+    $27, $28, $29, $30
   )
   RETURNING *
 `;
@@ -28,8 +30,17 @@ export const updateService = (fields: string[]) => `
 export const findServiceById = `SELECT * FROM services WHERE id = $1`;
 
 export const findActiveServiceById = `
-  SELECT * FROM services WHERE id = $1 AND is_active = true AND status = 'published'
+  SELECT s.*, c.requires_pandit, c.requires_payment
+  FROM services s
+  JOIN categories c ON c.id = s.category_id
+  WHERE s.id = $1 AND s.is_active = true AND s.status = 'published'
 `;
+
+export const hardDeleteService = `DELETE FROM services WHERE id = $1 RETURNING *`;
+export const countContactEntriesByService = `SELECT COUNT(*)::int AS count FROM contact_form_entries WHERE service_id = $1`;
+export const countOrdersByService = `SELECT COUNT(*)::int AS count FROM orders WHERE service_id = $1`;
+// Fetch gallery URLs before the hard delete cascades service_images away.
+export const findServiceImageUrls = `SELECT image_url FROM service_images WHERE service_id = $1`;
 
 export const softDeleteService = `
   UPDATE services SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
@@ -65,7 +76,7 @@ export const listBestsellers = `
 
 export const findServiceBySlug = `
   SELECT s.*,
-    c.name AS category_name, c.slug AS category_slug,
+    c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment,
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', si.id, 'url', si.image_url, 'alt_text', si.alt_text, 'display_order', si.display_order) ORDER BY si.display_order)
        FROM service_images si WHERE si.service_id = s.id), '[]'
@@ -82,10 +93,6 @@ export const findServiceBySlug = `
       (SELECT json_agg(jsonb_build_object('id', tm.id, 'name', tm.name, 'slug', tm.slug, 'city', tm.city, 'image_url', tm.image_url))
        FROM service_temples stt JOIN temples tm ON tm.id = stt.temple_id WHERE stt.service_id = s.id), '[]'
     ) AS temples,
-    COALESCE(
-      (SELECT json_agg(jsonb_build_object('id', kf.id, 'title', kf.title, 'description', kf.description, 'icon_url', kf.icon_url) ORDER BY kf.display_order)
-       FROM service_key_features kf WHERE kf.service_id = s.id), '[]'
-    ) AS key_features,
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', p.id, 'title', p.title, 'description', p.description, 'items', p.items, 'price', p.price) ORDER BY p.display_order)
        FROM service_packages p WHERE p.service_id = s.id), '[]'
@@ -105,7 +112,7 @@ export const findServiceBySlug = `
 
 export const findServiceByIdDetail = `
   SELECT s.*,
-    c.name AS category_name, c.slug AS category_slug,
+    c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment,
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', si.id, 'url', si.image_url, 'alt_text', si.alt_text, 'display_order', si.display_order) ORDER BY si.display_order)
        FROM service_images si WHERE si.service_id = s.id), '[]'
@@ -122,10 +129,6 @@ export const findServiceByIdDetail = `
       (SELECT json_agg(jsonb_build_object('id', tm.id, 'name', tm.name, 'slug', tm.slug, 'city', tm.city, 'image_url', tm.image_url))
        FROM service_temples stt JOIN temples tm ON tm.id = stt.temple_id WHERE stt.service_id = s.id), '[]'
     ) AS temples,
-    COALESCE(
-      (SELECT json_agg(jsonb_build_object('id', kf.id, 'title', kf.title, 'description', kf.description, 'icon_url', kf.icon_url) ORDER BY kf.display_order)
-       FROM service_key_features kf WHERE kf.service_id = s.id), '[]'
-    ) AS key_features,
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', p.id, 'title', p.title, 'description', p.description, 'items', p.items, 'price', p.price) ORDER BY p.display_order)
        FROM service_packages p WHERE p.service_id = s.id), '[]'
@@ -166,13 +169,9 @@ export const setServiceTemples = `
   ON CONFLICT (service_id, temple_id) DO NOTHING
 `;
 
-// ─── Nested arrays: key features / packages / FAQs ──────────
-
-export const clearKeyFeatures = `DELETE FROM service_key_features WHERE service_id = $1`;
-export const insertKeyFeature = `
-  INSERT INTO service_key_features (service_id, title, description, icon_url, display_order)
-  VALUES ($1, $2, $3, $4, $5)
-`;
+// ─── Nested arrays: packages / FAQs ──────────────────────────
+// key_features is a flat TEXT[] column on services now (see benefits) — no
+// child table/junction to clear-and-reinsert.
 
 export const clearPackages = `DELETE FROM service_packages WHERE service_id = $1`;
 export const insertPackage = `
@@ -209,8 +208,8 @@ export const listAllTemples = `SELECT * FROM temples ORDER BY name`;
 export const findTempleById = `SELECT * FROM temples WHERE id = $1`;
 
 export const createTemple = `
-  INSERT INTO temples (name, slug, description, address, city, state, latitude, longitude)
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  INSERT INTO temples (name, slug, description, address, city, state, latitude, longitude, image_url)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
   RETURNING *
 `;
 
@@ -221,3 +220,4 @@ export const updateTemple = (fields: string[]) => `
 `;
 
 export const softDeleteTemple = `UPDATE temples SET is_active = false WHERE id = $1 RETURNING *`;
+export const hardDeleteTemple = `DELETE FROM temples WHERE id = $1 RETURNING *`;

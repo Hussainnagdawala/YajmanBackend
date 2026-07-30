@@ -9,5 +9,6 @@ router.post("/", validate(createCouponSchema), couponController.createCoupon);
 router.get("/", couponController.listCouponsAdmin);
 router.patch("/:id", validate(updateCouponSchema), couponController.updateCoupon);
 router.delete("/:id", couponController.deleteCoupon);
+router.delete("/:id/permanent", couponController.deleteCouponPermanently);
 
 export default router;

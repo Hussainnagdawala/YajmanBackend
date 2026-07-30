@@ -21,5 +21,6 @@ router.get("/", categoryController.listCategoriesAdmin);
 router.get("/:id", categoryController.getCategory);
 router.patch("/:id", setUploadFolder, categoryUploads, validate(updateCategorySchema), categoryController.updateCategory);
 router.delete("/:id", categoryController.deleteCategory);
+router.delete("/:id/permanent", categoryController.deleteCategoryPermanently);
 
 export default router;

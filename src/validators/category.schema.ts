@@ -2,6 +2,15 @@ import { z } from "zod";
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #ffffff");
 
+// z.coerce.boolean() runs Boolean(value), and Boolean("false") is true — any
+// non-empty string coerces truthy, including the literal text "false" that
+// multer parses multipart form fields as. This preprocesses the string first
+// so form-data booleans actually work both ways.
+const formBoolean = z.preprocess(
+  (val) => (typeof val === "string" ? val !== "false" && val !== "0" && val !== "" : val),
+  z.boolean()
+);
+
 export const createCategorySchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().optional(),
@@ -13,6 +22,8 @@ export const createCategorySchema = z.object({
   display_order: z.coerce.number().int().default(0),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
+  requires_pandit: formBoolean.default(true),
+  requires_payment: formBoolean.default(true),
 });
 
 // NOTE: independent objects, not createXSchema.partial() — .partial() only makes
@@ -29,6 +40,8 @@ export const updateCategorySchema = z.object({
   display_order: z.coerce.number().int().optional(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
+  requires_pandit: formBoolean.optional(),
+  requires_payment: formBoolean.optional(),
   is_active: z.coerce.boolean().optional(),
 });
 

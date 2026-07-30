@@ -10,6 +10,7 @@ import {
   createTag as createTagQuery,
   updateTag as updateTagQuery,
   softDeleteTag,
+  hardDeleteTag,
 } from "../queries/category.queries";
 
 export const listTags = async (_req: Request, res: Response, next: NextFunction) => {
@@ -72,6 +73,16 @@ export const deleteTag = async (req: Request, res: Response, next: NextFunction)
     const result = await pool.query(softDeleteTag, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Tag not found", 404);
     return success(res, result.rows[0], "Tag deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteTagPermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteTag, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Tag not found", 404);
+    return success(res, result.rows[0], "Tag permanently deleted");
   } catch (err) {
     next(err);
   }

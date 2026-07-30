@@ -15,5 +15,6 @@ router.post("/", setUploadFolder, uploadSingle("image"), validate(createAddonSch
 router.get("/", addonController.listAddonsAdmin);
 router.patch("/:id", setUploadFolder, uploadSingle("image"), validate(updateAddonSchema), addonController.updateAddon);
 router.delete("/:id", addonController.deleteAddon);
+router.delete("/:id/permanent", addonController.deleteAddonPermanently);
 
 export default router;
