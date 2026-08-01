@@ -5,6 +5,7 @@ import { AppError } from "../utils/errors";
 import { validateCoupon } from "../services/coupon.service";
 import {
   listAllCoupons,
+  listActiveCoupons,
   createCoupon as createCouponQuery,
   updateCoupon as updateCouponQuery,
   softDeleteCoupon,
@@ -16,6 +17,16 @@ import {
 export const listCouponsAdmin = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await pool.query(listAllCoupons);
+    return success(res, result.rows);
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** App-facing: active + currently valid coupons only. */
+export const listCoupons = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(listActiveCoupons);
     return success(res, result.rows);
   } catch (err) {
     next(err);

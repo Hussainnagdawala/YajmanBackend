@@ -10,13 +10,37 @@ ALTER TABLE services DROP COLUMN IF EXISTS location;
 ALTER TABLE services DROP COLUMN IF EXISTS city;
 ALTER TABLE services DROP COLUMN IF EXISTS state;
 
-ALTER TABLE services RENAME COLUMN advance_booking_hours TO advance_booking_days;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'services' AND column_name = 'advance_booking_hours'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'services' AND column_name = 'advance_booking_days'
+  ) THEN
+    ALTER TABLE services RENAME COLUMN advance_booking_hours TO advance_booking_days;
+  END IF;
+END $$;
+
 ALTER TABLE services ALTER COLUMN advance_booking_days SET DEFAULT 0;
 
 ALTER TABLE services ADD COLUMN IF NOT EXISTS availability_start_date DATE;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS availability_end_date DATE;
-ALTER TABLE services ADD COLUMN IF NOT EXISTS booking_availability_type VARCHAR(20) NOT NULL DEFAULT 'all_day'
-  CHECK (booking_availability_type IN ('all_day', 'specific_day'));
+ALTER TABLE services ADD COLUMN IF NOT EXISTS booking_availability_type VARCHAR(20) NOT NULL DEFAULT 'all_day';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'services_booking_availability_type_check'
+  ) THEN
+    ALTER TABLE services
+      ADD CONSTRAINT services_booking_availability_type_check
+      CHECK (booking_availability_type IN ('all_day', 'specific_day'));
+  END IF;
+END $$;
+
 -- ISO date strings, not DATE[] — avoids the array-of-date timezone-parsing
 -- issue the scalar DATE_OID override in config/database.ts doesn't cover.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS available_dates TEXT[] NOT NULL DEFAULT '{}';

@@ -19,7 +19,26 @@ export const updatePopularSearchSchema = z.object({
   is_active: z.coerce.boolean().optional(),
 });
 
-const BANNER_POSITIONS = ["hero_slider", "middle_ad", "offer_banner", "category_banner"] as const;
+const BANNER_POSITIONS = [
+  "hero_slider",
+  "middle_ad",
+  "offer_banner",
+  "category_banner",
+] as const;
+
+/** Public app query: filter by banner type (maps to DB `position`). */
+export const listBannersQuerySchema = z
+  .object({
+    type: z.enum(BANNER_POSITIONS).optional(),
+    position: z.enum(BANNER_POSITIONS).optional(),
+  })
+  .refine((data) => data.type || data.position, {
+    message: "type (or position) is required: hero_slider | middle_ad | offer_banner | category_banner",
+    path: ["type"],
+  })
+  .transform((data) => ({
+    type: (data.type ?? data.position) as (typeof BANNER_POSITIONS)[number],
+  }));
 
 export const createBannerSchema = z.object({
   title: z.string().trim().max(200).optional(),
@@ -29,8 +48,14 @@ export const createBannerSchema = z.object({
   cta_text: z.string().trim().max(50).optional(),
   position: z.enum(BANNER_POSITIONS),
   discount_text: z.string().trim().max(50).optional(),
-  bg_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  text_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  bg_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  text_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   display_order: z.coerce.number().int().default(0),
   starts_at: z.coerce.date().optional(),
   ends_at: z.coerce.date().optional(),
@@ -43,8 +68,14 @@ export const updateBannerSchema = z.object({
   cta_text: z.string().trim().max(50).optional(),
   position: z.enum(BANNER_POSITIONS).optional(),
   discount_text: z.string().trim().max(50).optional(),
-  bg_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  text_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  bg_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  text_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   display_order: z.coerce.number().int().optional(),
   starts_at: z.coerce.date().optional(),
   ends_at: z.coerce.date().optional(),

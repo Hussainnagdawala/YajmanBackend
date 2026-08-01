@@ -131,6 +131,8 @@ export const listServicesQuerySchema = paginationSchema.extend({
   is_bestseller: z.coerce.boolean().optional(),
 });
 
+export const listTrendingQuerySchema = paginationSchema;
+
 export const listServicesAdminQuerySchema = paginationSchema.extend({
   category_id: z.string().uuid().optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
