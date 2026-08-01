@@ -68,8 +68,24 @@ export const listBestsellers = `
   SELECT s.*, c.name AS category_name, c.slug AS category_slug
   FROM services s
   JOIN categories c ON c.id = s.category_id
-  WHERE s.is_active = true AND s.status = 'published' AND (s.is_bestseller = true OR s.is_featured = true)
+  WHERE s.is_active = true AND s.status = 'published' AND s.is_bestseller = true
   ORDER BY c.display_order, s.display_order
+`;
+
+/** Trending / featured services for app carousels (flat list). */
+export const listTrendingServices = `
+  SELECT s.*, c.name AS category_name, c.slug AS category_slug
+  FROM services s
+  JOIN categories c ON c.id = s.category_id
+  WHERE s.is_active = true AND s.status = 'published' AND s.is_featured = true
+  ORDER BY s.display_order ASC, s.created_at DESC
+  LIMIT $1 OFFSET $2
+`;
+
+export const countTrendingServices = `
+  SELECT COUNT(*)::int AS count
+  FROM services s
+  WHERE s.is_active = true AND s.status = 'published' AND s.is_featured = true
 `;
 
 // ─── Services: single full detail ───────────────────────────

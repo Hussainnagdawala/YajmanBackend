@@ -2,7 +2,10 @@ import { Router, Request, Response, NextFunction } from "express";
 import * as homeController from "../../controllers/home.controller";
 import { validate } from "../../middleware/validate";
 import { uploadFields } from "../../middleware/upload";
-import { createBannerSchema, updateBannerSchema } from "../../validators/home.schema";
+import {
+  createBannerSchema,
+  updateBannerSchema,
+} from "../../validators/home.schema";
 
 const router = Router();
 
@@ -16,9 +19,21 @@ const bannerUploads = uploadFields([
   { name: "mobile_image", maxCount: 1 },
 ]);
 
-router.post("/", setUploadFolder, bannerUploads, validate(createBannerSchema), homeController.createBanner);
+router.post(
+  "/",
+  setUploadFolder,
+  bannerUploads,
+  validate(createBannerSchema),
+  homeController.createBanner,
+);
 router.get("/", homeController.listBannersAdmin);
-router.patch("/:id", setUploadFolder, bannerUploads, validate(updateBannerSchema), homeController.updateBanner);
+router.patch(
+  "/:id",
+  setUploadFolder,
+  bannerUploads,
+  validate(updateBannerSchema),
+  homeController.updateBanner,
+);
 router.delete("/:id", homeController.deleteBanner);
 router.delete("/:id/permanent", homeController.deleteBannerPermanently);
 

@@ -5,7 +5,7 @@ import * as contactController from "../controllers/contact.controller";
 import { authenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { uploadArray } from "../middleware/upload";
-import { listServicesQuerySchema } from "../validators/service.schema";
+import { listServicesQuerySchema, listTrendingQuerySchema } from "../validators/service.schema";
 import { submitServiceReviewSchema, listServiceReviewsQuerySchema } from "../validators/booking.schema";
 import { createServiceInquirySchema } from "../validators/contact.schema";
 
@@ -17,6 +17,7 @@ const setUploadFolder = (req: Request, _res: Response, next: NextFunction) => {
 };
 
 router.get("/bestsellers", serviceController.getBestsellers);
+router.get("/trending", validate(listTrendingQuerySchema, "query"), serviceController.getTrending);
 router.get("/:id/reviews", validate(listServiceReviewsQuerySchema, "query"), reviewController.listServiceReviews);
 router.post(
   "/:id/reviews",

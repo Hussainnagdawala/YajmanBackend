@@ -5,6 +5,7 @@ import { validateCouponSchema } from "../validators/coupon.schema";
 
 const router = Router();
 
+router.get("/", couponController.listCoupons);
 router.post("/validate", validate(validateCouponSchema), couponController.validateCouponHandler);
 
 export default router;

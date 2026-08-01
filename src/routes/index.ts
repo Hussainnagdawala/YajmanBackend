@@ -19,6 +19,7 @@ import contactRoutes from "./contact.routes";
 import notificationRoutes from "./notification.routes";
 import appRoutes from "./app.routes";
 import addonRoutes from "./addon.routes";
+import bannerRoutes from "./banner.routes";
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.use("/categories", categoryRoutes);
 router.use("/types", typeRoutes);
 router.use("/tags", tagRoutes);
 router.use("/services", serviceRoutes);
+router.use("/banners", bannerRoutes);
 router.use("/home", homeRoutes);
 router.use("/blogs", blogRoutes);
 router.use("/aayojan", aayojanRoutes);

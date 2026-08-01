@@ -39,6 +39,36 @@ const migrations = [
     checkSql:
       "SELECT EXISTS (SELECT 1 FROM app_settings WHERE key = 'general.privacy_policy_url');",
   },
+  {
+    file: "005_addons.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='addons');",
+  },
+  {
+    file: "006_service_benefits.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='services' AND column_name='benefits');",
+  },
+  {
+    file: "007_service_key_features_flat.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='services' AND column_name='key_features');",
+  },
+  {
+    file: "008_service_availability_and_free_addons.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='services' AND column_name='booking_availability_type');",
+  },
+  {
+    file: "009_category_capability_flags.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='categories' AND column_name='requires_pandit');",
+  },
+  {
+    file: "010_order_payment_failure_states.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = 'booking_status' AND e.enumlabel = 'payment_failed');",
+  },
 ];
 
 function runPsql(filePath, description) {

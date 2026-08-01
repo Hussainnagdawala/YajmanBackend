@@ -1,7 +1,14 @@
 const STATUS_GROUPS: Record<string, string> = {
-  upcoming: "o.status IN ('confirmed', 'pandit_assigned', 'in_progress') AND o.booking_date >= CURRENT_DATE",
+  // Active bookings stay in Upcoming even after the scheduled date passes.
+  // Otherwise confirmed/in-progress orders with a past booking_date fall into
+  // a black hole (not upcoming, not completed, not cancelled) until an admin
+  // marks them completed.
+  // `pending` = order created / awaiting payment confirmation — still show it.
+  upcoming:
+    "o.status IN ('pending', 'confirmed', 'pandit_assigned', 'in_progress')",
   completed: "o.status = 'completed'",
-  cancelled: "o.status IN ('cancelled', 'refunded', 'payment_failed', 'refund_failed')",
+  cancelled:
+    "o.status IN ('cancelled', 'refunded', 'payment_failed', 'refund_failed', 'disputed')",
 };
 
 export const listBookings = (statusGroup: string | undefined, limitIdx: number, offsetIdx: number) => `

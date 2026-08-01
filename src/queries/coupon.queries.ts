@@ -1,5 +1,20 @@
 export const listAllCoupons = `SELECT * FROM coupons ORDER BY created_at DESC`;
 
+/** Active coupons currently within validity window — for app checkout / offers UI. */
+export const listActiveCoupons = `
+  SELECT
+    id, code, title, description, discount_type, discount_value,
+    max_discount_amount, min_order_amount, usage_limit, usage_count,
+    per_user_limit, valid_from, valid_until,
+    applicable_categories, applicable_services
+  FROM coupons
+  WHERE is_active = true
+    AND valid_from <= NOW()
+    AND valid_until >= NOW()
+    AND (usage_limit IS NULL OR usage_count < usage_limit)
+  ORDER BY valid_until ASC, created_at DESC
+`;
+
 export const findCouponById = `SELECT * FROM coupons WHERE id = $1`;
 
 export const findCouponByCode = `SELECT * FROM coupons WHERE code = $1`;

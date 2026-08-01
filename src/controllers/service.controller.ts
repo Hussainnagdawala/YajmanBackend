@@ -20,6 +20,8 @@ import {
   listServices as listServicesQuery,
   countServices,
   listBestsellers,
+  listTrendingServices,
+  countTrendingServices,
   findServiceBySlug,
   clearServiceTypes,
   setServiceTypes,
@@ -227,6 +229,24 @@ export const getBestsellers = async (_req: Request, res: Response, next: NextFun
     }
 
     return success(res, Array.from(grouped.values()));
+  } catch (err) {
+    next(err);
+  }
+};
+
+/** App: trending / featured services (flat list). */
+export const getTrending = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 20;
+    const { limit: safeLimit, offset, meta } = paginate(page, limit);
+
+    const [result, countResult] = await Promise.all([
+      pool.query(listTrendingServices, [safeLimit, offset]),
+      pool.query(countTrendingServices),
+    ]);
+
+    return success(res, result.rows, "Success", 200, meta(countResult.rows[0].count as number));
   } catch (err) {
     next(err);
   }
