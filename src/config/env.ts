@@ -3,6 +3,14 @@ import { z } from "zod";
 
 dotenv.config();
 
+// Pin the process timezone so any local-time read (e.g. invoice.service.ts's
+// `new Date().getFullYear()` for invoice numbering) is deterministic
+// regardless of the host machine's clock setting. Every date/time value this
+// app actually cares about is already timezone-explicit elsewhere (TIMESTAMPTZ
+// columns, or toISTDateTime's hardcoded +05:30) — this only removes the one
+// remaining implicit dependency on the server's local clock.
+process.env.TZ = process.env.TZ || "UTC";
+
 const envSchema = z.object({
   PORT: z.string().default("3001").transform(Number),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),

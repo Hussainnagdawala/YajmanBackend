@@ -12,7 +12,13 @@ All responses share one envelope:
 ```
 `pagination` only appears on list endpoints. `details` only appears on Zod validation failures (422) — see `README.md` bug #18.
 
-Uploads are `multipart/form-data`. Array fields inside a multipart body (e.g. `type_ids`, `key_features`) are sent as **JSON-stringified strings**, not repeated form fields — see `README.md`'s note on this.
+Uploads are `multipart/form-data`. Array fields inside a multipart body (e.g. `type_ids`, `key_features`) are sent as **JSON-stringified strings** (e.g. `'["uuid1","uuid2"]'`), not repeated form fields — a single bare value (e.g. `type_ids=<uuid>` with no brackets) also works, coerced to a one-item array. See `README.md`'s note on this.
+
+**Date/time format — one convention everywhere:**
+- A **calendar date with no time** (`booking_date`, `birth_date`, `date_of_birth`, `event_date`, `preferred_date`, `availability_start_date`, `availability_end_date`, every `available_dates` entry, `from`/`to` filters) is always the bare string `"YYYY-MM-DD"` — e.g. `"2026-08-10"`. Sending a full ISO datetime (`"2026-08-10T00:00:00Z"`) to one of these fields now fails validation (`422`) — it used to be silently accepted by some of these fields and not others, which was a real bug; all calendar-date fields are consistent now.
+- A **time with no date** (`booking_time`, `birth_time`, `time_of_birth`, `event_time`) is always `"HH:MM"` 24-hour, e.g. `"14:30"`.
+- A **real instant** (`created_at`, `updated_at`, `valid_from`/`valid_until`, `starts_at`/`ends_at`, `scheduled_at`, `published_at`, `respond_by`, `paid_at`) is a full ISO-8601 datetime string, e.g. `"2026-08-10T09:30:00.000Z"` — these accept any format `new Date()` can parse, but send proper ISO with a `Z`/offset to avoid ambiguity.
+- Everything server-side is IST-anchored for business logic (`toISTDateTime` in `utils/date.ts` treats `booking_date`+`booking_time` as India time explicitly), and the server process itself runs on `TZ=UTC` so its own clock never drifts by host — neither of these should ever leak into what the frontend needs to send; just follow the three bullets above.
 
 ---
 
@@ -162,7 +168,7 @@ Admin auth required. Mounted at `/admin/notifications`.
 User picker for “selected users” reuses existing `GET /admin/users` (search/pagination).
 
 ### `POST /admin/notifications`
-Create a campaign. JSON or multipart (`image` optional file → S3 folder `notifications`).
+Create a campaign. JSON or multipart (`image` optional file → local disk, `uploads/notifications` folder — S3 code kept commented in `middleware/upload.ts` for later).
 
 ```json
 {
@@ -255,7 +261,7 @@ No auth. Active tags only.
 
 ### `GET /services`
 No auth. Query params (all optional):
-`category` (slug or uuid), `type` (slug/uuid, comma-separated for multiple), `tag` (slug), `search`, `min_price`, `max_price`, `rating` (min), `sort` (`price_asc|price_desc|rating|newest|title`), `is_featured`, `is_bestseller`, `city`, `page`, `limit`.
+`category` (slug or uuid), `type` (slug/uuid, comma-separated for multiple), `tag` (slug), `search`, `min_price`, `max_price`, `rating` (min), `sort` (`price_asc|price_desc|rating|newest|title`), `is_featured`, `is_bestseller`, `page`, `limit`. (`city` filter was removed along with dropping `location`/`city`/`state` from services — filter by linked temple's city instead if needed, no endpoint for that yet.)
 
 ### `GET /services/bestsellers`
 No auth. Returns `is_bestseller`/`is_featured` services grouped by category:
@@ -264,7 +270,7 @@ No auth. Returns `is_bestseller`/`is_featured` services grouped by category:
 ```
 
 ### `GET /services/:slug`
-No auth. Full detail: `images`, `types`, `tags`, `temples`, `key_features`, `packages`, `faqs` all included, joined arrays default to `[]`.
+No auth. Full detail: `images`, `types`, `tags`, `temples`, `addons`, `benefits` (string array), `key_features` (string array), `packages`, `faqs` all included, joined arrays default to `[]`. Also includes `requires_pandit`/`requires_payment` (from the category), `is_addon_available`, `availability_start_date`/`availability_end_date`/`booking_availability_type`/`available_dates`, `advance_booking_days`. `location`/`city`/`state` no longer exist on a service — only `pincode`/`latitude`/`longitude` remain.
 
 ### `GET /services/:id/reviews`
 No auth. Approved reviews only. Query: `page`, `limit`, `sort` (`newest|rating`).
@@ -380,6 +386,7 @@ Auth required.
   "customer_calling_number": null,
   "customer_email": "hussain@example.com",
   "members": ["Hussain", "Ahmed"],
+  "addon_ids": ["uuid1"],
   "gotra": "Bharadwaja",
   "gotra_unknown": false,
   "coupon_code": "BUY10",
@@ -392,16 +399,28 @@ Auth required.
   "birth_place": null
 }
 ```
-→
+→ paid service:
 ```json
 {
   "data": {
     "order": { "id": "uuid", "order_number": "YAJ2026072301", "total_amount": 809.10 },
+    "payment_required": true,
     "razorpay": { "order_id": "order_xxxx", "amount": 80910, "currency": "INR", "key_id": "rzp_live_xxxx" }
   }
 }
 ```
-Validates: service active, booking ≥24h out, no duplicate pending booking (same user+service+date), coupon re-validated server-side.
+→ service whose category has `requires_payment: false` (no `razorpay` block at all, no Razorpay order/payment row ever created, order goes straight to `confirmed`):
+```json
+{
+  "data": {
+    "order": { "id": "uuid", "order_number": "YAJ2026072301", "total_amount": 0, "status": "confirmed" },
+    "payment_required": false
+  }
+}
+```
+Always branch on `payment_required`, not on whether `razorpay` is present.
+
+Validates: service active, booking within `availability_start_date`/`availability_end_date` if set, booking_date must be one of `available_dates` if `booking_availability_type` is `specific_day`, booking is at least `advance_booking_days` out (per-service, was a global 24h flat rule before), no duplicate pending booking (same user+service+date), coupon re-validated server-side. If the service's category has `requires_payment: false`, sending `coupon_code` or `addon_ids` is rejected with `400` — neither applies.
 
 ### `POST /checkout/verify-payment`
 Auth required. Called after the Razorpay client-side callback.
@@ -421,16 +440,17 @@ Auth required. Called after the Razorpay client-side callback.
 Auth required. Query: `status` (`upcoming|completed|cancelled`), `page`, `limit`.
 - upcoming = `confirmed|pandit_assigned|in_progress` AND `booking_date >= today`
 - completed = `completed`
-- cancelled = `cancelled|refunded`
+- cancelled = `cancelled|refunded|payment_failed|refund_failed`
 
 ### `GET /bookings/:id`
 Auth required (owner or admin). Full detail: service snapshot, `members`, `pandit` (null if unassigned), `payment` (null if none), `review` (null if not yet reviewed).
 
 ### `PATCH /bookings/:id/cancel`
-Auth required (owner or admin). Cannot cancel <24h before `booking_datetime`, or if status is `completed|cancelled|refunded`. Auto-refunds via Razorpay if payment was captured (refund failure is logged, doesn't block the cancellation).
+Auth required (owner or admin). Cannot cancel <24h before `booking_datetime` (admin callers bypass this window), or if status is `completed|cancelled|refunded|payment_failed|refund_failed|disputed`. Auto-refunds via Razorpay if payment was captured — the refund is attempted *before* any status write, so a refund failure lands the order on `refund_failed` (not silently reported as cancelled); a captured-and-refunded order lands on `refunded`; nothing to refund lands on `cancelled`.
 ```json
 { "reason": "Schedule changed" }
 ```
+→ `{ "data": { ...order, "refund_outcome": "success" | "failed" | "not_applicable" } }`
 
 ### `POST /bookings/:id/review`
 Auth required. Booking must be `completed`. One review per booking. Multipart, field `photos` (up to 5 images).
@@ -441,7 +461,7 @@ comment: "The pandit was very knowledgeable..."  (optional)
 ```
 
 ### `GET /bookings/:id/invoice`
-Auth required (owner or admin). Generates the PDF + uploads to S3 on first call, returns the cached URL on every call after.
+Auth required (owner or admin). Generates the PDF + saves it to local disk (`uploads/invoices/`) on first call, returns the cached URL on every call after.
 → `{ "data": { "invoice_number": "INV-2026-0001", "pdf_url": "https://..." } }`
 
 ---
@@ -485,73 +505,111 @@ type_ids: ["uuid1","uuid2"]   (JSON string)
 display_order: 1
 meta_title: "..."
 meta_description: "..."
+requires_pandit: true    (optional, default true — false = category never needs a pandit assigned)
+requires_payment: true   (optional, default true — false = services in this category have no price, checkout skips Razorpay entirely)
 Files: image, icon
 ```
-### `GET /admin/categories` — all, including inactive, with linked `types`/`type_count`
+### `GET /admin/categories` — all, including inactive, with linked `types`/`type_count`, `requires_pandit`, `requires_payment`
 ### `GET /admin/categories/:id`
 ### `PATCH /admin/categories/:id` — same fields, all optional, multipart
 ### `DELETE /admin/categories/:id` — soft delete, `409` if any service references it
+### `DELETE /admin/categories/:id/permanent` — hard delete, same `409` guard as above, also removes `image`/`icon` files from disk
 
 ### `POST /admin/types` — multipart, `{name, description, display_order}` + file `image`
 ### `GET /admin/types`
 ### `PATCH /admin/types/:id`
 ### `DELETE /admin/types/:id` — soft delete
+### `DELETE /admin/types/:id/permanent` — hard delete, `409` if any service references it, removes `image` file
 
 ### `POST /admin/tags` — `{name, color, bg_color, display_order}` (hex colors, e.g. `#ffffff`)
 ### `GET /admin/tags`
 ### `PATCH /admin/tags/:id`
 ### `DELETE /admin/tags/:id` — soft delete
+### `DELETE /admin/tags/:id/permanent` — hard delete, no dependents to guard
 
 ---
 
 ## Services / Temples
 
-### `POST /admin/services` — multipart, transactional (service row + type/tag/temple junctions + key_features/packages/faqs all committed or rolled back together)
+### `POST /admin/services` — multipart, transactional (service row + type/tag/temple/addon junctions + key_features/packages/faqs all committed or rolled back together)
 ```
 title: "Shravana Special Parthiv Shivling Nirmaan and Abhishek"
 category_id: uuid
 type_ids: ["uuid1","uuid2"]        (JSON string)
 tag_ids: ["uuid1"]                 (JSON string)
 temple_ids: ["uuid1"]               (JSON string, optional)
-price: 899
+addon_ids: ["uuid1"]                (JSON string, optional — addons offered for this service)
+is_addon_available: true            (optional, default false — must be true for addon_ids to matter at checkout; server forces this to false if the category's requires_pandit is false)
+price: 899                          (required unless the category's requires_payment is false, in which case omit — server forces it to null)
 original_price: 2000
 short_description / about_puja / description: text
 custom_content: "<h2>...</h2>"      (HTML, sanitized with DOMPurify server-side)
-location / city / state / pincode / latitude / longitude
+benefits: '["Peace of mind","Removes obstacles"]'   (JSON string, plain array of strings)
+pincode / latitude / longitude       (location/city/state were removed from services entirely — no longer accepted)
 video_url
 duration_minutes: 90
-advance_booking_hours: 24
+advance_booking_days: 1              (renamed from advance_booking_hours — now actually enforced at checkout, was previously dead)
+availability_start_date: "2026-08-01"   (optional, "YYYY-MM-DD")
+availability_end_date: "2026-08-31"     (optional, "YYYY-MM-DD")
+booking_availability_type: "all_day"    (optional, default "all_day" — or "specific_day")
+available_dates: '["2026-08-10","2026-08-17"]'  (JSON string of "YYYY-MM-DD", required-in-effect when booking_availability_type is "specific_day" — checkout rejects any booking_date not in this list)
 is_featured / is_bestseller: true
 display_order: 0
-key_features: '[{"title":"1 Pandit","description":"Experienced"}]'   (JSON string)
+key_features: '["Experienced pandits","Doorstep service"]'   (JSON string, plain array of strings — no longer title/description/icon_url objects)
 packages: '[{"title":"Basic","items":[{"name":"Samagri","quantity":1,"unit":"set"}],"price":500}]'  (JSON string)
 faqs: '[{"question":"What is included?","answer":"..."}]'            (JSON string)
 meta_title / meta_description
 Files: feature_image (required, single), images (gallery, up to 20)
 ```
 ### `GET /admin/services` — query: `category_id`, `status`, `is_active`, `sort`, `page`, `limit`
-### `GET /admin/services/:id`
-### `PATCH /admin/services/:id` — same shape, all fields optional (omitting a field/array leaves it untouched; sending `[]` explicitly clears it)
+### `GET /admin/services/:id` — includes `requires_pandit`/`requires_payment` (from the joined category) and `addons` array alongside `types`/`tags`/`temples`
+### `PATCH /admin/services/:id` — same shape, all fields optional (omitting a field/array leaves it untouched; sending `[]` explicitly clears it). Changing `category_id` re-validates price/addon rules against the *new* category.
 ### `DELETE /admin/services/:id` — soft delete
+### `DELETE /admin/services/:id/permanent` — hard delete, `409` if any contact-form entries or orders reference it, removes `feature_image` + all gallery image files
 ### `POST /admin/services/:id/images` — multipart, field `images` (gallery add-on, up to 20)
-### `DELETE /admin/services/:id/images/:imageId` — also deletes the file from S3
+### `DELETE /admin/services/:id/images/:imageId` — also deletes the file from disk
 
-### `POST /admin/temples` — `{name, description, address, city, state, latitude, longitude}`
+### `POST /admin/temples` — multipart, `{name, description, address, city, state, latitude, longitude}` + optional file `image`
 ### `GET /admin/temples`
-### `PATCH /admin/temples/:id`
+### `PATCH /admin/temples/:id` — same fields, multipart
 ### `DELETE /admin/temples/:id` — soft delete
+### `DELETE /admin/temples/:id/permanent` — hard delete, removes `image` file
+
+---
+
+## Addons
+
+Small catalog items (name/image/price) admins assign to specific services; customers pick them at checkout and the price adds to the order total.
+
+### `POST /admin/addons` — multipart
+```
+name: "Extra Samagri Kit"
+price: 150                (required unless is_free is true)
+is_free: false             (optional, default false — true forces price to 0 regardless of what's sent)
+display_order: 1
+Files: image (optional)
+```
+### `GET /admin/addons` — all, including inactive
+### `PATCH /admin/addons/:id` — same fields, all optional, multipart. Flipping `is_free` to `true` also zeroes `price` in the same request even if `price` isn't sent.
+### `DELETE /admin/addons/:id` — soft delete
+### `DELETE /admin/addons/:id/permanent` — hard delete, removes `image` file
+### `GET /addons` — public, no auth, active addons only
+
+At checkout (`POST /checkout/create-order`), `addon_ids` must be a subset of the addons actually assigned to `service_id`, and the service's `is_addon_available` must be `true` — otherwise `400`.
 
 ---
 
 ## Home Page Content
 
-### `POST/GET/PATCH/DELETE /admin/banners` — multipart, `{title, subtitle, description, link_url, cta_text, position, discount_text, bg_color, text_color, display_order, starts_at, ends_at}` + files `image` (required), `mobile_image` (optional). `position`: `hero_slider|middle_ad|offer_banner|category_banner`.
+### `POST/GET/PATCH/DELETE /admin/banners` — multipart, `{title, subtitle, description, link_url, cta_text, position, discount_text, bg_color, text_color, display_order, starts_at, ends_at}` + files `image` (required), `mobile_image` (optional). `position`: `hero_slider|middle_ad|offer_banner|category_banner`. `DELETE .../:id/permanent` also exists — hard delete, removes both image files.
 
-### `POST/GET/PATCH/DELETE /admin/popular-searches` — `{label, link_url, display_order, row_number}` (`row_number`: 1 = tag chips row, 2 = text links row)
+### `POST/GET/PATCH/DELETE /admin/popular-searches` — `{label, link_url, display_order, row_number}` (`row_number`: 1 = tag chips row, 2 = text links row). `DELETE .../:id/permanent` also exists.
 
-### `POST/GET/PATCH/DELETE /admin/testimonials` — multipart, `{author_name, author_designation, quote, rating, page, display_order}` + optional file `avatar`. `page`: `home|aayojan`.
+### `POST/GET/PATCH/DELETE /admin/testimonials` — multipart, `{author_name, author_designation, quote, rating, page, display_order}` + optional file `avatar`. `page`: `home|aayojan`. `DELETE .../:id/permanent` also exists — hard delete, removes the avatar file.
 
-### `POST/GET/PATCH/DELETE /admin/recommended-services` — `{service_id, page, section, display_order}`. Generic curation table — not currently surfaced by `GET /home` (see README gaps).
+### `POST/GET/PATCH/DELETE /admin/recommended-services` — `{service_id, page, section, display_order}`. Generic curation table — not currently surfaced by `GET /home` (see README gaps). `DELETE .../:id/permanent` also exists.
+
+Every soft-delete above (`DELETE .../:id`) is unchanged/non-destructive (`is_active=false`); the `/permanent` sibling on each is a real `DELETE FROM`, no undo.
 
 ---
 
@@ -573,17 +631,18 @@ Files: feature_image (optional, single), images (gallery, up to 20)
 ### `GET /admin/blogs` — query: `status`, `category_id`, `page`, `limit` (not in original spec, added since PATCH/DELETE need a way to discover ids)
 ### `PATCH /admin/blogs/:id`
 ### `DELETE /admin/blogs/:id` — soft delete via `status='archived'`
+### `DELETE /admin/blogs/:id/permanent` — hard delete, removes `feature_image` + all gallery image files
 
-### `POST/GET/PATCH/DELETE /admin/blog-categories` — `{name, description, display_order}`
-### `POST/GET/PATCH/DELETE /admin/blog-authors` — `{name, bio, user_id}` (`user_id` optional, links to an admin account)
+### `POST/GET/PATCH/DELETE /admin/blog-categories` — `{name, description, display_order}`. `DELETE .../:id/permanent` — hard delete, `409` if any blogs reference it.
+### `POST/GET/PATCH/DELETE /admin/blog-authors` — multipart, `{name, bio, user_id}` (`user_id` optional, links to an admin account) + optional file `avatar`. `DELETE .../:id/permanent` also exists.
 
 ---
 
 ## Aayojan
 
-### `POST/GET/PATCH/DELETE /admin/aayojan/content` — multipart, `{section_key, title, subtitle, description, cta_text, cta_link, display_order}` + optional file `image`. `section_key` is unique (e.g. `hero`, `about`, `features`, `cta`).
-### `POST/GET/PATCH/DELETE /admin/aayojan/events` — multipart, `{title, description, short_description, location, city, event_date, event_time, price, original_price, max_capacity, status}` + files `feature_image`, `images`.
-### `POST/GET/PATCH/DELETE /admin/aayojan/banners` — multipart, `{title, link_url, display_order}` + required file `image`.
+### `POST/GET/PATCH/DELETE /admin/aayojan/content` — multipart, `{section_key, title, subtitle, description, cta_text, cta_link, display_order}` + optional file `image`. `section_key` is unique (e.g. `hero`, `about`, `features`, `cta`). `DELETE .../:id/permanent` also exists.
+### `POST/GET/PATCH/DELETE /admin/aayojan/events` — multipart, `{title, description, short_description, location, city, event_date, event_time, price, original_price, max_capacity, status}` + files `feature_image`, `images`. `event_date` is `"YYYY-MM-DD"` (not a full datetime). `DELETE .../:id/permanent` — `409` if any orders reference this event, else hard delete + removes all image files.
+### `POST/GET/PATCH/DELETE /admin/aayojan/banners` — multipart, `{title, link_url, display_order}` + required file `image`. `DELETE .../:id/permanent` also exists.
 
 ---
 
@@ -612,6 +671,7 @@ Rules: `code` 3-30 chars (auto-uppercased); `discount_value`/`max_discount_amoun
 ### `GET /admin/coupons`
 ### `PATCH /admin/coupons/:id` — all fields optional, independently
 ### `DELETE /admin/coupons/:id` — soft delete
+### `DELETE /admin/coupons/:id/permanent` — hard delete, `409` if the coupon has any usage history or linked orders
 
 ---
 
@@ -652,12 +712,12 @@ Note: a pandit's `pandit_profiles` row doesn't exist until they've called `GET`/
 
 ## Pandit Assignments
 
-### `POST /admin/pandit-assignments` — assigns a pandit to an order, sets `respond_by` = now + 48h, order status → `pandit_assigned`. Blocked if order is cancelled/completed/refunded, or if the pandit already has an *accepted* booking at that exact date+time.
+### `POST /admin/pandit-assignments` — assigns a pandit to an order, sets `respond_by` = now + 48h, order status → `pandit_assigned`. Order must currently be `confirmed` (allow-list, not a deny-list — a `pending`/unpaid order isn't assignable either, only a confirmed one is). `400` if the order's category has `requires_pandit: false`. `409` if the pandit already has an *accepted* booking at that exact date+time.
 ```json
 { "order_id": "uuid", "pandit_id": "pandit_profile_uuid" }
 ```
 ### `GET /admin/pandit-assignments` — query: `status`, `expiring` (`true` = pending assignments with `respond_by` within the next 12h — a threshold not specified in the source plan, chosen here), `page`, `limit`
-### `PATCH /admin/pandit-assignments/:id/reassign` — re-purposes the same assignment row for a new pandit (fresh `respond_by`, status reset to `pending`), rather than creating a new row
+### `PATCH /admin/pandit-assignments/:id/reassign` — re-purposes the same assignment row for a new pandit (fresh `respond_by`, status reset to `pending`), rather than creating a new row. Order must currently be `pandit_assigned` or `in_progress`. Same `requires_pandit`/double-booking checks as create.
 ```json
 { "pandit_id": "new_pandit_profile_uuid" }
 ```
@@ -685,11 +745,18 @@ Note: a pandit's `pandit_profiles` row doesn't exist until they've called `GET`/
 ## Orders
 
 ### `GET /admin/orders` — query: `status` (`all` or any booking_status), `from`, `to`, `search` (order_number/customer_name/phone), `page`, `limit`
-### `GET /admin/orders/:id` — full detail: `members`, `payment`, `assignment`, `invoice`, `review`, all null-safe
-### `PATCH /admin/orders/:id/status` — direct status override, **no side effects** (no refund logic — for that, use the customer-facing `PATCH /bookings/:id/cancel` instead)
+### `GET /admin/orders/:id` — full detail: `members`, `addons`, `payment`, `assignment`, `invoice`, `review`, all null-safe
+### `GET /admin/orders/:id/activity` — this order's audit trail (status changes, cancellations, refund attempts), from `activity_logs`
+### `PATCH /admin/orders/:id/status` — status transitions are now validated against a fixed state machine (`booking.service.ts`'s `ORDER_STATUS_TRANSITIONS`), not a blind override — e.g. `confirmed` can only move to `pandit_assigned|in_progress|completed|disputed`, terminal states (`cancelled|refunded|payment_failed|refund_failed`) can't move anywhere. `409` (`INVALID_STATUS_TRANSITION`) if the requested move isn't allowed. Still no refund logic — for that, use cancel below.
 ```json
 { "status": "completed", "notes": "Marked as completed by admin" }
 ```
+### `PATCH /admin/orders/:id/cancel` — admin-initiated cancel, bypasses the 24h-before-booking window customers are held to. Same refund-then-terminal-status logic as the customer cancel endpoint (`booking.service.ts`'s shared `cancelOrderWithRefund`).
+```json
+{ "reason": "Customer requested by phone" }
+```
+→ `{ "data": { ...order, "refund_outcome": "success" | "failed" | "not_applicable" } }`
+### `POST /admin/orders/:id/retry-refund` — order must be `refund_failed`; re-attempts the Razorpay refund. `502` if it fails again (order stays `refund_failed`, check Razorpay dashboard).
 
 ---
 ---
@@ -764,7 +831,7 @@ All fields optional.
 - `POST/GET/PUT/DELETE /admin/notifications`
 - `POST /admin/notifications/:id/send|resend|duplicate|cancel`
 - Selected-user picker: reuse `GET /admin/users`
-- Optional image upload (S3 folder `notifications`)
+- Optional image upload (local disk, `uploads/notifications` folder)
 - Scheduled sends via `node-cron` every minute
 - Apply migration: `psql -f src/database/migrations/002_notification_campaigns.sql` (or `yarn seed`)
 
@@ -775,7 +842,7 @@ Transactional events (pandit assigned/accepted/rejected/completed) still call `c
 ## Known gaps (things intentionally not built — see `README.md` for full detail)
 
 - Browsing the admin activity log UI — `activity_logs` is written for notification campaigns and app setting updates, but there is still no `GET /admin/activity-log` endpoint.
-- Cron jobs: OTP cleanup, unpaid-order auto-cancel, stale pandit-assignment auto-expiry — still not implemented (notification scheduling cron **is** implemented).
+- Cron jobs: OTP cleanup, stale pandit-assignment auto-expiry — still not implemented. Notification scheduling cron and unpaid-order auto-cancel (`order-expiry.cron.ts` — bulk-expires `pending` orders older than 30 min to `payment_failed`) **are** implemented.
 - WhatsApp notification delivery — still not built (FCM push **is** implemented when Firebase env is set).
 - Aayojan event reviews (`aayojan_event_reviews` table exists in schema) — no endpoint, no booking/attendance concept to gate who can review an event.
 - User-group / topic / city / subscription targeting for campaigns — schema reserves `group`/`topic` on `target_type`; not wired yet.

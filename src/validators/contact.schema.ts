@@ -35,5 +35,5 @@ export const createAayojanContactSchema = z.object({
   city: z.string().trim().max(100).optional(),
   event_name: z.string().trim().max(200).optional(),
   number_of_people: z.coerce.number().int().positive().optional(),
-  preferred_date: z.coerce.date().optional(),
+  preferred_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
