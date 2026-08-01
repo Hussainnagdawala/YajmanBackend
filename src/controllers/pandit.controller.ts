@@ -10,6 +10,7 @@ import { findBookingById } from "../queries/booking.queries";
 import { completeOrder } from "../queries/order.queries";
 import {
   findPanditProfileByUserId,
+  findPanditProfileById,
   createPanditProfile,
   updatePanditProfile as updatePanditProfileQuery,
   findAssignmentForPandit,
@@ -30,6 +31,8 @@ import {
   countPanditsAdmin,
   findPanditDetailAdmin,
   findPanditUsersWithoutProfile,
+  listAvailablePandits as listAvailablePanditsQuery,
+  countAvailablePandits,
 } from "../queries/pandit.queries";
 
 const ASSIGNMENT_STATUSES = ["pending", "accepted", "rejected", "expired", "completed"];
@@ -303,11 +306,79 @@ export const listPanditsAdmin = async (req: Request, res: Response, next: NextFu
   }
 };
 
+export const listAvailablePandits = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await backfillMissingPanditProfiles();
+
+    const q = req.query as unknown as {
+      date: string;
+      time: string;
+      search?: string;
+      is_verified?: boolean;
+      city?: string;
+      page: number;
+      limit: number;
+    };
+    const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
+
+    const values: unknown[] = [q.date, q.time];
+    const whereClauses: string[] = [];
+    if (q.search) {
+      values.push(`%${q.search}%`);
+      whereClauses.push(`(pp.display_name ILIKE $${values.length} OR u.phone ILIKE $${values.length})`);
+    }
+    if (q.is_verified !== undefined) {
+      values.push(q.is_verified);
+      whereClauses.push(`pp.is_verified = $${values.length}`);
+    }
+    if (q.city) {
+      values.push(q.city);
+      whereClauses.push(`$${values.length} = ANY(pp.service_areas)`);
+    }
+
+    const [rows, count] = await Promise.all([
+      pool.query(listAvailablePanditsQuery(whereClauses, values.length + 1, values.length + 2), [...values, safeLimit, offset]),
+      pool.query<{ count: number }>(countAvailablePandits(whereClauses), values),
+    ]);
+
+    return success(res, rows.rows, "Available pandits fetched", 200, meta(count.rows[0].count));
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getPanditAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await pool.query(findPanditDetailAdmin, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Pandit not found", 404);
     return success(res, result.rows[0]);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// :id here is the pandit_profiles.id (same id returned by list/detail above),
+// not the user id — matches getPanditAdmin's :id for consistency.
+export const updatePanditAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const existing = await pool.query(findPanditProfileById, [req.params.id]);
+    if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Pandit not found", 404);
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    for (const [key, value] of Object.entries(req.body)) {
+      fields.push(key);
+      values.push(value);
+    }
+    const file = req.file as Express.MulterS3.File | undefined;
+    if (file) {
+      fields.push("profile_image_url");
+      values.push(file.location);
+    }
+    if (fields.length === 0) throw new AppError("VALIDATION_ERROR", "No fields to update", 400);
+
+    const result = await pool.query(updatePanditProfileQuery(fields), [req.params.id, ...values]);
+    return success(res, result.rows[0], "Pandit profile updated");
   } catch (err) {
     next(err);
   }

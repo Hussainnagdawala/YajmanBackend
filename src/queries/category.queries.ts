@@ -92,8 +92,8 @@ export const listAllTypes = `SELECT * FROM types ORDER BY display_order, name`;
 export const findTypeById = `SELECT * FROM types WHERE id = $1`;
 
 export const createType = `
-  INSERT INTO types (name, slug, description, image_url, display_order)
-  VALUES ($1, $2, $3, $4, $5)
+  INSERT INTO types (name, slug, description, image_url, icon_url, display_order)
+  VALUES ($1, $2, $3, $4, $5, $6)
   RETURNING *
 `;
 

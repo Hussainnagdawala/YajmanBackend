@@ -68,23 +68,55 @@ export const countOrdersAdmin = (whereClauses: string[]) => `
 export const findOrderDetailAdmin = `
   SELECT o.*,
     s.title AS service_title, s.slug AS service_slug,
+    cu.name AS cancelled_by_name,
     COALESCE(
       (SELECT json_agg(om.name ORDER BY om.display_order) FROM order_members om WHERE om.order_id = o.id), '[]'
     ) AS members,
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', oa.id, 'name', oa.name, 'price', oa.price)) FROM order_addons oa WHERE oa.order_id = o.id), '[]'
     ) AS addons,
-    (
-      SELECT jsonb_build_object('id', pm.id, 'status', pm.status, 'method', pm.method, 'paid_at', pm.paid_at, 'amount', pm.amount)
-      FROM payments pm WHERE pm.order_id = o.id ORDER BY pm.created_at DESC LIMIT 1
-    ) AS payment,
-    (
-      SELECT jsonb_build_object('id', pa.id, 'status', pa.status, 'display_name', pp.display_name, 'phone', u.phone)
-      FROM pandit_assignments pa
-      JOIN pandit_profiles pp ON pp.id = pa.pandit_id
-      JOIN users u ON u.id = pp.user_id
-      WHERE pa.order_id = o.id ORDER BY pa.assigned_at DESC LIMIT 1
-    ) AS assignment,
+    -- Every payment attempt, newest first — not just the latest — so a retried
+    -- checkout (failed attempt followed by a successful one) is fully visible
+    -- when investigating "charged twice" / "payment failed why" queries.
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object(
+        'id', pm.id,
+        'razorpay_order_id', pm.razorpay_order_id,
+        'razorpay_payment_id', pm.razorpay_payment_id,
+        'amount', pm.amount,
+        'currency', pm.currency,
+        'method', pm.method,
+        'status', pm.status,
+        'error_code', pm.error_code,
+        'error_description', pm.error_description,
+        'error_reason', pm.error_reason,
+        'paid_at', pm.paid_at,
+        'refunded_at', pm.refunded_at,
+        'refund_amount', pm.refund_amount,
+        'refund_id', pm.refund_id,
+        'created_at', pm.created_at
+      ) ORDER BY pm.created_at DESC)
+       FROM payments pm WHERE pm.order_id = o.id), '[]'
+    ) AS payments,
+    -- Full assignment history, not just the latest — shows prior rejections/
+    -- expiries that explain "why hasn't a pandit accepted yet".
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object(
+        'id', pa.id,
+        'status', pa.status,
+        'display_name', pp.display_name,
+        'phone', u.phone,
+        'assigned_at', pa.assigned_at,
+        'respond_by', pa.respond_by,
+        'accepted_at', pa.accepted_at,
+        'rejected_at', pa.rejected_at,
+        'rejection_reason', pa.rejection_reason
+      ) ORDER BY pa.assigned_at DESC)
+       FROM pandit_assignments pa
+       JOIN pandit_profiles pp ON pp.id = pa.pandit_id
+       JOIN users u ON u.id = pp.user_id
+       WHERE pa.order_id = o.id), '[]'
+    ) AS assignments,
     (
       SELECT jsonb_build_object('invoice_number', i.invoice_number, 'pdf_url', i.pdf_url)
       FROM invoices i WHERE i.order_id = o.id LIMIT 1
@@ -92,9 +124,17 @@ export const findOrderDetailAdmin = `
     (
       SELECT jsonb_build_object('id', r.id, 'rating', r.rating, 'title', r.title, 'comment', r.comment)
       FROM reviews r WHERE r.booking_id = o.id LIMIT 1
-    ) AS review
+    ) AS review,
+    CASE WHEN o.coupon_id IS NOT NULL THEN (
+      SELECT jsonb_build_object(
+        'id', c.id, 'code', c.code, 'title', c.title,
+        'discount_type', c.discount_type, 'discount_value', c.discount_value,
+        'max_discount_amount', c.max_discount_amount
+      ) FROM coupons c WHERE c.id = o.coupon_id
+    ) ELSE NULL END AS coupon
   FROM orders o
   JOIN services s ON s.id = o.service_id
+  LEFT JOIN users cu ON cu.id = o.cancelled_by
   WHERE o.id = $1
 `;
 

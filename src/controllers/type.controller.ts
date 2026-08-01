@@ -35,10 +35,12 @@ export const listTypesAdmin = async (_req: Request, res: Response, next: NextFun
 export const createType = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, description, display_order } = req.body;
-    const imageUrl = (req.file as Express.MulterS3.File | undefined)?.location ?? null;
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const imageUrl = (files?.["image"]?.[0] as Express.MulterS3.File | undefined)?.location ?? null;
+    const iconUrl = (files?.["icon"]?.[0] as Express.MulterS3.File | undefined)?.location ?? null;
     const slug = await generateUniqueSlug(name, "types");
 
-    const result = await pool.query(createTypeQuery, [name, slug, description ?? null, imageUrl, display_order ?? 0]);
+    const result = await pool.query(createTypeQuery, [name, slug, description ?? null, imageUrl, iconUrl, display_order ?? 0]);
     return success(res, result.rows[0], "Type created", 201);
   } catch (err) {
     next(err);
@@ -59,10 +61,17 @@ export const updateType = async (req: Request, res: Response, next: NextFunction
       fields.push("slug");
       values.push(newSlug);
     }
-    const file = req.file as Express.MulterS3.File | undefined;
-    if (file) {
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const imageFile = files?.["image"]?.[0] as Express.MulterS3.File | undefined;
+    const iconFile = files?.["icon"]?.[0] as Express.MulterS3.File | undefined;
+    if (imageFile) {
       fields.push("image_url");
-      values.push(file.location);
+      values.push(imageFile.location);
+    }
+    if (iconFile) {
+      fields.push("icon_url");
+      values.push(iconFile.location);
     }
 
     if (fields.length === 0) throw new AppError("VALIDATION_ERROR", "No fields to update", 400);

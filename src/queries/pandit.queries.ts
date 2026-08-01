@@ -52,6 +52,39 @@ export const findPanditDetailAdmin = `
   WHERE pp.id = $1
 `;
 
+// $1 = date, $2 = time. "Not busy" mirrors isPanditDoubleBooked's own
+// definition (only an 'accepted' assignment blocks) so this list can't show
+// a pandit as available whom POST /admin/pandit-assignments then refuses.
+export const listAvailablePandits = (whereClauses: string[], limitIdx: number, offsetIdx: number) => `
+  SELECT pp.*, u.phone, u.email, u.status AS user_status
+  FROM pandit_profiles pp
+  JOIN users u ON u.id = pp.user_id
+  WHERE pp.is_available = true
+    AND NOT EXISTS (
+      SELECT 1 FROM pandit_assignments pa
+      JOIN orders o ON o.id = pa.order_id
+      WHERE pa.pandit_id = pp.id AND pa.status = 'accepted'
+        AND o.booking_date = $1 AND o.booking_time = $2
+    )
+    ${whereClauses.length ? `AND ${whereClauses.join(" AND ")}` : ""}
+  ORDER BY pp.rating_avg DESC, pp.total_bookings DESC
+  LIMIT $${limitIdx} OFFSET $${offsetIdx}
+`;
+
+export const countAvailablePandits = (whereClauses: string[]) => `
+  SELECT COUNT(*)::int AS count
+  FROM pandit_profiles pp
+  JOIN users u ON u.id = pp.user_id
+  WHERE pp.is_available = true
+    AND NOT EXISTS (
+      SELECT 1 FROM pandit_assignments pa
+      JOIN orders o ON o.id = pa.order_id
+      WHERE pa.pandit_id = pp.id AND pa.status = 'accepted'
+        AND o.booking_date = $1 AND o.booking_time = $2
+    )
+    ${whereClauses.length ? `AND ${whereClauses.join(" AND ")}` : ""}
+`;
+
 // ─── Assignments: creation + lookup ──────────────────────────
 
 export const findOrderForAssignment = `

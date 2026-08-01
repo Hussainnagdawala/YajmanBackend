@@ -24,6 +24,20 @@ export const updatePanditProfileSchema = z.object({
   is_available: z.coerce.boolean().optional(),
 });
 
+// Admin-side edit: same fields a pandit can set on themselves, plus fields
+// only an admin should control (verification, KYC).
+export const updatePanditProfileAdminSchema = z.object({
+  display_name: z.string().trim().min(1).max(100).optional(),
+  bio: z.string().trim().optional(),
+  experience_years: z.coerce.number().int().nonnegative().optional(),
+  specializations: stringArrayOptional(),
+  languages: stringArrayOptional(),
+  service_areas: stringArrayOptional(),
+  is_available: z.coerce.boolean().optional(),
+  is_verified: z.coerce.boolean().optional(),
+  aadhaar_number: z.string().trim().regex(/^\d{12}$/).optional(),
+});
+
 export const assignPanditSchema = z.object({
   order_id: z.string().uuid(),
   pandit_id: z.string().uuid(),
@@ -57,4 +71,12 @@ export const listPanditsAdminQuerySchema = paginationSchema.extend({
   search: z.string().trim().optional(),
   is_available: z.coerce.boolean().optional(),
   is_verified: z.coerce.boolean().optional(),
+});
+
+export const listAvailablePanditsQuerySchema = paginationSchema.extend({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  search: z.string().trim().optional(),
+  is_verified: z.coerce.boolean().optional(),
+  city: z.string().trim().optional(),
 });

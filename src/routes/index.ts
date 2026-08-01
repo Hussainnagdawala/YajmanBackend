@@ -1,3 +1,26 @@
+// ============================================================
+// Swagger/OpenAPI docs convention (served at GET /api-docs)
+// ============================================================
+// Every route is documented via an `@openapi` JSDoc block placed directly
+// above its `router.<method>(...)` call, in the route file itself — see
+// auth.routes.ts for a fully-worked example. src/config/swagger.ts globs
+// every file under src/routes/** and feeds these comments to swagger-jsdoc,
+// so a new route is picked up automatically the moment its JSDoc block is
+// added — no separate registration step, no central list to update.
+//
+// A route added WITHOUT that block simply will not appear in the docs — it
+// still works, it's just invisible there. When adding a new endpoint, add
+// its @openapi block in the same edit.
+//
+// Reusable pieces already defined in src/config/swagger.ts — reference them
+// with $ref rather than redefining:
+//   - #/components/schemas/SuccessEnvelope, PaginationMeta, ErrorEnvelope
+//   - #/components/responses/NotFound, ValidationError, Unauthorized, Forbidden
+//   - securitySchemes.bearerAuth — add `security: [{ bearerAuth: [] }]` on any
+//     route that needs a token, INCLUDING routes whose `authenticate` middleware
+//     is only applied at the router.use(...) mount point below (e.g. everything
+//     under /profile, /coupons, /bookings, /notifications, /pandit, and all of
+//     /admin/**) rather than visibly in the route file itself.
 import { Router } from "express";
 import { authenticate } from "../middleware/auth";
 import { requireRole } from "../middleware/role";
