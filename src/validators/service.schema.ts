@@ -26,6 +26,17 @@ const jsonArrayDefaulted = <T extends z.ZodTypeAny>(schema: T) =>
 const jsonArrayOptional = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess(jsonPreprocess, z.array(schema).optional());
 
+// multipart/form-data sends every field as a string — a blank input arrives as
+// "" (present key, empty value), never as an absent key. `.optional()`/`.default()`
+// only trigger on `undefined`, so an untouched optional date/number field still
+// hits its regex/coerce check and fails as "Invalid" instead of being treated as
+// not-sent. Pass the FULLY formed schema (including its own trailing .optional()
+// or .default(x)) — this only normalizes "" -> undefined before that runs, it
+// doesn't add optionality itself (order matters: default() must see the
+// already-converted undefined, not the raw "").
+const blankToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((val) => (val === "" ? undefined : val), schema);
+
 const packageItemSchema = z.object({
   name: z.string().trim().min(1),
   quantity: z.union([z.string(), z.number()]).optional(),
@@ -53,21 +64,21 @@ export const createServiceSchema = z.object({
   addon_ids: jsonArrayDefaulted(z.string().uuid()),
   is_addon_available: z.coerce.boolean().default(false),
   benefits: jsonArrayDefaulted(z.string().trim().min(1)),
-  price: z.coerce.number().nonnegative().optional(),
-  original_price: z.coerce.number().positive().optional(),
+  price: blankToUndefined(z.coerce.number().nonnegative().optional()),
+  original_price: blankToUndefined(z.coerce.number().positive().optional()),
   short_description: z.string().trim().optional(),
   about_puja: z.string().trim().optional(),
   description: z.string().trim().optional(),
   custom_content: z.string().optional(),
   pincode: z.string().trim().max(10).optional(),
-  latitude: z.coerce.number().optional(),
-  longitude: z.coerce.number().optional(),
+  latitude: blankToUndefined(z.coerce.number().optional()),
+  longitude: blankToUndefined(z.coerce.number().optional()),
   video_url: z.string().trim().optional(),
-  duration_minutes: z.coerce.number().int().positive().optional(),
-  advance_booking_days: z.coerce.number().int().nonnegative().default(0),
-  availability_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  availability_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  booking_availability_type: z.enum(["all_day", "specific_day"]).default("all_day"),
+  duration_minutes: blankToUndefined(z.coerce.number().int().positive().optional()),
+  advance_booking_days: blankToUndefined(z.coerce.number().int().nonnegative().default(0)),
+  availability_start_date: blankToUndefined(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+  availability_end_date: blankToUndefined(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+  booking_availability_type: blankToUndefined(z.enum(["all_day", "specific_day"]).default("all_day")),
   available_dates: jsonArrayDefaulted(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   is_featured: z.coerce.boolean().default(false),
   is_bestseller: z.coerce.boolean().default(false),
@@ -92,21 +103,21 @@ export const updateServiceSchema = z.object({
   addon_ids: jsonArrayOptional(z.string().uuid()),
   is_addon_available: z.coerce.boolean().optional(),
   benefits: jsonArrayOptional(z.string().trim().min(1)),
-  price: z.coerce.number().nonnegative().optional(),
-  original_price: z.coerce.number().positive().optional(),
+  price: blankToUndefined(z.coerce.number().nonnegative().optional()),
+  original_price: blankToUndefined(z.coerce.number().positive().optional()),
   short_description: z.string().trim().optional(),
   about_puja: z.string().trim().optional(),
   description: z.string().trim().optional(),
   custom_content: z.string().optional(),
   pincode: z.string().trim().max(10).optional(),
-  latitude: z.coerce.number().optional(),
-  longitude: z.coerce.number().optional(),
+  latitude: blankToUndefined(z.coerce.number().optional()),
+  longitude: blankToUndefined(z.coerce.number().optional()),
   video_url: z.string().trim().optional(),
-  duration_minutes: z.coerce.number().int().positive().optional(),
-  advance_booking_days: z.coerce.number().int().nonnegative().optional(),
-  availability_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  availability_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  booking_availability_type: z.enum(["all_day", "specific_day"]).optional(),
+  duration_minutes: blankToUndefined(z.coerce.number().int().positive().optional()),
+  advance_booking_days: blankToUndefined(z.coerce.number().int().nonnegative().optional()),
+  availability_start_date: blankToUndefined(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+  availability_end_date: blankToUndefined(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+  booking_availability_type: blankToUndefined(z.enum(["all_day", "specific_day"]).optional()),
   available_dates: jsonArrayOptional(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
   is_featured: z.coerce.boolean().optional(),
   is_bestseller: z.coerce.boolean().optional(),

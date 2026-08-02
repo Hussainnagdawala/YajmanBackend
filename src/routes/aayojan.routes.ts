@@ -11,7 +11,7 @@ const router = Router();
  * /aayojan:
  *   get:
  *     tags: [Aayojan]
- *     summary: Get the Aayojan page aggregator (content sections, events, banners, testimonials)
+ *     summary: Get the Aayojan page aggregator (content sections, events, banners, testimonials, gallery)
  *     responses:
  *       200:
  *         description: Aayojan page data fetched
@@ -29,6 +29,7 @@ const router = Router();
  *                         events: { type: array, items: { type: object } }
  *                         banners: { type: array, items: { type: object } }
  *                         testimonials: { type: array, items: { type: object } }
+ *                         gallery: { type: array, items: { type: object } }
  */
 router.get("/", aayojanController.getAayojan);
 

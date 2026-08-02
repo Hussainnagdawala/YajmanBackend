@@ -17,6 +17,7 @@ import {
   softDeleteBanner,
   hardDeleteBanner,
   listActiveTestimonials,
+  listActiveTestimonialsAll,
   listAllTestimonials,
   createTestimonial as createTestimonialQuery,
   updateTestimonial as updateTestimonialQuery,
@@ -35,6 +36,24 @@ import { listActiveCategories } from "../queries/category.queries";
 import { listBestsellers } from "../queries/service.queries";
 
 type MulterS3File = Express.MulterS3.File;
+
+// ─── Public: testimonials ──────────────────────────────────────
+
+export const listTestimonialsPublic = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { page } = req.query as { page?: "home" | "aayojan" };
+    const result = page
+      ? await pool.query(listActiveTestimonials, [page])
+      : await pool.query(listActiveTestimonialsAll);
+    return success(res, result.rows);
+  } catch (err) {
+    next(err);
+  }
+};
 
 // ─── Public: home aggregator ─────────────────────────────────
 

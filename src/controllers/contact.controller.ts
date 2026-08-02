@@ -3,7 +3,7 @@ import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
-import { findServiceById } from "../queries/service.queries";
+import { findServiceWithCategory } from "../queries/service.queries";
 import {
   createGeneralContactEntry,
   createServiceInquiryEntry,
@@ -25,13 +25,13 @@ export const createContact = async (req: Request, res: Response, next: NextFunct
 
 export const createServiceInquiry = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const serviceResult = await pool.query(findServiceById, [req.params.id]);
+    const serviceResult = await pool.query(findServiceWithCategory, [req.params.id]);
     const service = serviceResult.rows[0];
     if (!service) throw new AppError("NOT_FOUND", "Service not found", 404);
 
     const { name, email, phone, message } = req.body;
     const result = await pool.query(createServiceInquiryEntry, [
-      name, email ?? null, phone, message ?? null, service.id, service.title,
+      name, email ?? null, phone, message ?? null, service.id, service.title, service.category_id, service.category_name,
     ]);
     return success(res, result.rows[0], "Inquiry submitted", 201);
   } catch (err) {

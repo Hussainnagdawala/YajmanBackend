@@ -345,24 +345,40 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     }
     const finalPrice = requires_payment ? price : null;
     const finalIsAddonAvailable = requires_pandit ? is_addon_available : false;
+    // Availability/booking windows, temple info, key features, FAQs, types, benefits
+    // and "about this puja" only make sense for bookable (priced) services — an
+    // enquiry-only category (no price) has no checkout flow for any of this to
+    // apply to, so none of it is accepted/stored for it, same pattern as price above.
+    const finalAvailabilityStartDate = requires_payment ? (availability_start_date ?? null) : null;
+    const finalAvailabilityEndDate = requires_payment ? (availability_end_date ?? null) : null;
+    const finalBookingAvailabilityType = requires_payment ? booking_availability_type : "all_day";
+    const finalAvailableDates = requires_payment ? available_dates : [];
+    const finalKeyFeatures = requires_payment ? key_features : [];
+    const finalBenefits = requires_payment ? benefits : [];
+    const finalAboutPuja = requires_payment ? (about_puja ?? null) : null;
+    const finalTypeIds: string[] = requires_payment ? (type_ids ?? []) : [];
+    const finalTempleIds: string[] = requires_payment ? (temple_ids ?? []) : [];
+    const finalFaqs: FaqInput[] = requires_payment ? (faqs ?? []) : [];
 
     const slug = await generateUniqueSlug(title, "services");
-    const sanitizedContent = custom_content ? DOMPurify.sanitize(custom_content) : null;
-    const primaryTypeId = type_ids?.[0] ?? null;
+    const sanitizedContent = requires_payment && custom_content ? DOMPurify.sanitize(custom_content) : null;
+    const primaryTypeId = finalTypeIds[0] ?? null;
 
     await client.query("BEGIN");
     const result = await client.query(createServiceQuery, [
       title, slug, category_id, primaryTypeId, finalPrice, original_price ?? null,
-      short_description ?? null, about_puja ?? null, description ?? null, sanitizedContent,
+      short_description ?? null, finalAboutPuja, description ?? null, sanitizedContent,
       pincode ?? null, latitude ?? null, longitude ?? null,
       featureImage.location || null, video_url ?? null, duration_minutes ?? null, advance_booking_days,
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
-      finalIsAddonAvailable, benefits, key_features,
-      availability_start_date ?? null, availability_end_date ?? null, booking_availability_type, available_dates,
+      finalIsAddonAvailable, finalBenefits, finalKeyFeatures,
+      finalAvailabilityStartDate, finalAvailabilityEndDate, finalBookingAvailabilityType, finalAvailableDates,
     ]);
     const service = result.rows[0];
 
-    await replaceServiceRelations(client, service.id, { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs });
+    await replaceServiceRelations(client, service.id, {
+      type_ids: finalTypeIds, tag_ids, temple_ids: finalTempleIds, addon_ids, packages, faqs: finalFaqs,
+    });
 
     if (files?.images && files.images.length > 0) {
       for (const [i, img] of files.images.entries()) {
@@ -406,10 +422,6 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       fields.push("slug");
       values.push(newSlug);
     }
-    if (type_ids !== undefined) {
-      fields.push("type_id");
-      values.push(type_ids[0] ?? null);
-    }
     if (files?.feature_image?.[0]) {
       fields.push("feature_image_url");
       values.push(files.feature_image[0].location);
@@ -434,12 +446,29 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       if (!(effectivePrice && effectivePrice > 0)) {
         throw new AppError("VALIDATION_ERROR", "This category requires a price", 400);
       }
+      if (type_ids !== undefined) setField("type_id", type_ids[0] ?? null);
     } else {
+      // Availability/booking windows, temple info, key features, FAQs, types,
+      // benefits and "about this puja" only apply to bookable (priced) services —
+      // force-clear all of it for an enquiry-only category, same as price above,
+      // regardless of whether this particular PATCH even touched these fields.
       setField("price", null);
+      setField("type_id", null);
+      setField("availability_start_date", null);
+      setField("availability_end_date", null);
+      setField("booking_availability_type", "all_day");
+      setField("available_dates", []);
+      setField("key_features", []);
+      setField("benefits", []);
+      setField("about_puja", null);
     }
     if (!requires_pandit) {
       setField("is_addon_available", false);
     }
+
+    const effectiveTypeIds = requires_payment ? type_ids : [];
+    const effectiveTempleIds = requires_payment ? temple_ids : [];
+    const effectiveFaqs = requires_payment ? faqs : [];
 
     await client.query("BEGIN");
 
@@ -447,7 +476,9 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       await client.query(updateServiceQuery(fields), [req.params.id, ...values]);
     }
 
-    await replaceServiceRelations(client, req.params.id, { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs });
+    await replaceServiceRelations(client, req.params.id, {
+      type_ids: effectiveTypeIds, tag_ids, temple_ids: effectiveTempleIds, addon_ids, packages, faqs: effectiveFaqs,
+    });
 
     if (files?.images && files.images.length > 0) {
       const maxOrder = await client.query<{ max_order: number }>(maxServiceImageOrder, [req.params.id]);

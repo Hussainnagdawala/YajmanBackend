@@ -51,7 +51,7 @@ router.post("/webhook", checkoutController.razorpayWebhook);
  * /checkout/create-order:
  *   post:
  *     tags: [Checkout]
- *     summary: Create an order for a service booking and, if the service requires payment, a Razorpay order to pay for it
+ *     summary: Create an order + Razorpay order for a bookable (priced) service. Rejects services with no price — those are enquiry-only, use POST /services/{id}/inquiry instead.
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
  *       required: true
@@ -91,9 +91,8 @@ router.post("/webhook", checkoutController.razorpayWebhook);
  *     responses:
  *       201:
  *         description: >
- *           Order created. If the service does not require payment the order is confirmed
- *           immediately (payment_required: false). Otherwise a Razorpay order is created and
- *           its details are returned for the client to open Razorpay checkout (payment_required: true).
+ *           Order created and a Razorpay order opened for it — use the returned razorpay
+ *           details to launch Razorpay checkout, then call /checkout/verify-payment.
  *         content:
  *           application/json:
  *             schema:
@@ -111,10 +110,9 @@ router.post("/webhook", checkoutController.razorpayWebhook);
  *                             order_number: { type: string }
  *                             total_amount: { type: number }
  *                             status: { type: string }
- *                         payment_required: { type: boolean }
+ *                         payment_required: { type: boolean, description: Always true — this endpoint only ever creates orders for priced services }
  *                         razorpay:
  *                           type: object
- *                           description: Present only when payment_required is true
  *                           properties:
  *                             order_id: { type: string }
  *                             amount: { type: integer, description: Amount in paise }

@@ -110,6 +110,27 @@ export const findBlogBySlug = `
   WHERE b.slug = $1 AND b.status = 'published'
 `;
 
+// Same shape as findBlogBySlug but no status filter and keyed by id — for the
+// admin edit screen, which needs to load drafts/archived posts too.
+export const findBlogByIdAdmin = `
+  SELECT b.*,
+    bc.name AS category_name, bc.slug AS category_slug,
+    ba.name AS author_name, ba.bio AS author_bio, ba.avatar_url AS author_avatar_url,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', bi.id, 'url', bi.image_url, 'alt_text', bi.alt_text) ORDER BY bi.display_order)
+       FROM blog_images bi WHERE bi.blog_id = b.id), '[]'
+    ) AS images,
+    COALESCE(
+      (SELECT json_agg(jsonb_build_object('id', rb.id, 'title', rb.title, 'slug', rb.slug, 'feature_image_url', rb.feature_image_url) ORDER BY br.display_order)
+       FROM blog_recommended br JOIN blogs rb ON rb.id = br.recommended_blog_id
+       WHERE br.blog_id = b.id), '[]'
+    ) AS related_blogs
+  FROM blogs b
+  LEFT JOIN blog_categories bc ON bc.id = b.category_id
+  LEFT JOIN blog_authors ba ON ba.id = b.author_id
+  WHERE b.id = $1
+`;
+
 export const listSidebarServices = `
   SELECT id, title, slug, price, feature_image_url, rating_avg
   FROM services

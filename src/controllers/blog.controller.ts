@@ -7,6 +7,7 @@ import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
 import {
+  listActiveBlogCategories,
   listAllBlogCategories,
   createBlogCategory as createBlogCategoryQuery,
   updateBlogCategory as updateBlogCategoryQuery,
@@ -20,6 +21,7 @@ import {
   createBlog as createBlogQuery,
   updateBlog as updateBlogQuery,
   findBlogById,
+  findBlogByIdAdmin,
   softDeleteBlog,
   hardDeleteBlog,
   findBlogImageUrls,
@@ -37,6 +39,17 @@ import {
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
 type MulterS3File = Express.MulterS3.File;
+
+// ─── Public: blog categories ─────────────────────────────────
+
+export const listBlogCategoriesPublic = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(listActiveBlogCategories);
+    return success(res, result.rows);
+  } catch (err) {
+    next(err);
+  }
+};
 
 // ─── Admin: blog categories ──────────────────────────────────
 
@@ -217,6 +230,16 @@ export const listBlogsAdmin = async (req: Request, res: Response, next: NextFunc
     ]);
 
     return success(res, rows.rows, "Blogs fetched", 200, meta(count.rows[0].count));
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getBlogAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(findBlogByIdAdmin, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Blog not found", 404);
+    return success(res, result.rows[0]);
   } catch (err) {
     next(err);
   }

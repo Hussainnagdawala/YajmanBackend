@@ -82,6 +82,10 @@ export const updateBannerSchema = z.object({
   is_active: z.coerce.boolean().optional(),
 });
 
+export const listTestimonialsQuerySchema = z.object({
+  page: z.enum(["home", "aayojan"]).optional(),
+});
+
 export const createTestimonialSchema = z.object({
   author_name: z.string().trim().min(1).max(100),
   author_designation: z.string().trim().max(100).optional(),

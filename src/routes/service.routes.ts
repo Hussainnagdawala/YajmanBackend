@@ -177,7 +177,12 @@ router.post(
  * /services/{id}/inquiry:
  *   post:
  *     tags: [Services]
- *     summary: Submit an inquiry for a service (no auth required)
+ *     summary: >
+ *       Submit an inquiry for a service (no auth required) — the intended flow for
+ *       services whose category has no price (requires_payment: false), which have
+ *       no checkout flow at all. service_id, service_name, category_id and
+ *       category_name are all resolved server-side from the :id in the URL, not
+ *       accepted from the client.
  *     parameters:
  *       - in: path
  *         name: id
@@ -201,7 +206,27 @@ router.post(
  *         description: Inquiry submitted
  *         content:
  *           application/json:
- *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         id: { type: string, format: uuid }
+ *                         form_type: { type: string, example: service }
+ *                         name: { type: string }
+ *                         email: { type: string, nullable: true }
+ *                         phone: { type: string }
+ *                         message: { type: string, nullable: true }
+ *                         service_id: { type: string, format: uuid }
+ *                         service_name: { type: string }
+ *                         category_id: { type: string, format: uuid }
+ *                         category_name: { type: string }
+ *                         status: { type: string, example: new }
+ *                         is_read: { type: boolean }
+ *                         created_at: { type: string, format: date-time }
  *       400:
  *         $ref: '#/components/responses/ValidationError'
  *       404:

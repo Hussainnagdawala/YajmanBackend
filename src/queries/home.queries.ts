@@ -47,6 +47,9 @@ export const hardDeleteBanner = `DELETE FROM banners WHERE id = $1 RETURNING *`;
 export const listActiveTestimonials = `
   SELECT * FROM testimonials WHERE page = $1 AND is_active = true ORDER BY display_order
 `;
+export const listActiveTestimonialsAll = `
+  SELECT * FROM testimonials WHERE is_active = true ORDER BY page, display_order
+`;
 export const listAllTestimonials = `SELECT * FROM testimonials ORDER BY page, display_order`;
 export const createTestimonial = `
   INSERT INTO testimonials (author_name, author_designation, author_avatar_url, quote, rating, page, display_order)

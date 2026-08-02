@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import * as aayojanController from "../../controllers/aayojan.controller";
 import { validate } from "../../middleware/validate";
-import { uploadFields, uploadSingle } from "../../middleware/upload";
+import { uploadFields, uploadSingle, uploadArray } from "../../middleware/upload";
 import {
   createAayojanContentSchema,
   updateAayojanContentSchema,
@@ -578,5 +578,140 @@ router.delete("/banners/:id", aayojanController.deleteAayojanBanner);
  *         $ref: '#/components/responses/Forbidden'
  */
 router.delete("/banners/:id/permanent", aayojanController.deleteAayojanBannerPermanently);
+
+// ─── Gallery images (page-level, standalone) ──────────────────
+
+/**
+ * @openapi
+ * /admin/aayojan/gallery:
+ *   post:
+ *     tags: [Admin: Aayojan]
+ *     summary: Bulk-upload images to the Aayojan page gallery (images only — no title/link, unlike banners)
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [images]
+ *             properties:
+ *               images:
+ *                 type: array
+ *                 items: { type: string, format: binary }
+ *                 description: Up to 20 image files in one request. Rejected with 400 if none are sent.
+ *     responses:
+ *       201:
+ *         description: Gallery images uploaded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: string, format: uuid }
+ *                           image_url: { type: string }
+ *                           display_order: { type: integer }
+ *                           is_active: { type: boolean }
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.post(
+  "/gallery",
+  setUploadFolder("aayojan"),
+  uploadArray("images", 20),
+  aayojanController.createAayojanGalleryImages
+);
+
+/**
+ * @openapi
+ * /admin/aayojan/gallery:
+ *   get:
+ *     tags: [Admin: Aayojan]
+ *     summary: List all Aayojan gallery images, including inactive ones
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Gallery images list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items: { type: object }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.get("/gallery", aayojanController.listAayojanGalleryAdmin);
+
+/**
+ * @openapi
+ * /admin/aayojan/gallery/{id}:
+ *   delete:
+ *     tags: [Admin: Aayojan]
+ *     summary: Soft-delete a single Aayojan gallery image
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Gallery image deleted
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.delete("/gallery/:id", aayojanController.deleteAayojanGalleryImage);
+
+/**
+ * @openapi
+ * /admin/aayojan/gallery/{id}/permanent:
+ *   delete:
+ *     tags: [Admin: Aayojan]
+ *     summary: Permanently delete a single Aayojan gallery image and remove it from storage
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Gallery image permanently deleted
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.delete("/gallery/:id/permanent", aayojanController.deleteAayojanGalleryImagePermanently);
 
 export default router;

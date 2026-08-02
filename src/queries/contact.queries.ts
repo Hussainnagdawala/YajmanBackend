@@ -5,8 +5,8 @@ export const createGeneralContactEntry = `
 `;
 
 export const createServiceInquiryEntry = `
-  INSERT INTO contact_form_entries (form_type, name, email, phone, message, service_id, service_name)
-  VALUES ('service', $1, $2, $3, $4, $5, $6)
+  INSERT INTO contact_form_entries (form_type, name, email, phone, message, service_id, service_name, category_id, category_name)
+  VALUES ('service', $1, $2, $3, $4, $5, $6, $7, $8)
   RETURNING *
 `;
 

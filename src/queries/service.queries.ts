@@ -29,6 +29,13 @@ export const updateService = (fields: string[]) => `
 
 export const findServiceById = `SELECT * FROM services WHERE id = $1`;
 
+export const findServiceWithCategory = `
+  SELECT s.id, s.title, c.id AS category_id, c.name AS category_name
+  FROM services s
+  JOIN categories c ON c.id = s.category_id
+  WHERE s.id = $1
+`;
+
 export const findActiveServiceById = `
   SELECT s.*, c.requires_pandit, c.requires_payment
   FROM services s

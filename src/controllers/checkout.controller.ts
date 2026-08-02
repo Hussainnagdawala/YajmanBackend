@@ -96,6 +96,17 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const service = serviceResult.rows[0];
     if (!service) throw new AppError("NOT_FOUND", "Service not found or not available for booking", 404);
 
+    // Categories with no price never had a checkout flow to begin with — they're
+    // enquiry-only (POST /services/:id/inquiry). Reject here instead of silently
+    // auto-confirming a ₹0 order, which used to be this endpoint's behavior.
+    if (!service.requires_payment) {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        "This service does not accept online bookings — submit an inquiry instead (POST /services/:id/inquiry)",
+        400
+      );
+    }
+
     if (
       (service.availability_start_date && booking_date < service.availability_start_date) ||
       (service.availability_end_date && booking_date > service.availability_end_date)
@@ -104,13 +115,6 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     }
     if (service.booking_availability_type === "specific_day" && !service.available_dates.includes(booking_date)) {
       throw new AppError("VALIDATION_ERROR", "Selected date is not available for this service", 400);
-    }
-
-    if (!service.requires_payment) {
-      if (coupon_code) throw new AppError("VALIDATION_ERROR", "Coupons are not applicable to this service", 400);
-      if (addon_ids && addon_ids.length > 0) {
-        throw new AppError("VALIDATION_ERROR", "Addons are not applicable to this service", 400);
-      }
     }
 
     const bookingDateTime = computeBookingDateTime(booking_date, booking_time, service.advance_booking_days);
@@ -136,12 +140,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     }
     const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
-    const basePrice = service.requires_payment ? Number(service.price) : 0;
+    const basePrice = Number(service.price);
     let discountAmount = 0;
     let couponId: string | null = null;
     let couponCode: string | null = null;
 
-    if (service.requires_payment && coupon_code) {
+    if (coupon_code) {
       const validation = await validateCoupon(coupon_code, userId, basePrice, service_id);
       if (!validation.valid) {
         throw new AppError("COUPON_INVALID", validation.message ?? "Coupon is not valid", 400);
@@ -151,11 +155,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       couponCode = validation.coupon!.code;
     }
 
-    let convenienceFee = 0;
-    if (service.requires_payment) {
-      const settingResult = await pool.query<{ value: string }>(getAppSettingByKey, ["convenience_fee"]);
-      convenienceFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
-    }
+    const settingResult = await pool.query<{ value: string }>(getAppSettingByKey, ["convenience_fee"]);
+    const convenienceFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
     // Coupon discount applies to basePrice only — addons are added on top, undiscounted.
     const totalAmount = Math.round((basePrice + addonTotal - discountAmount + convenienceFee) * 100) / 100;
 
@@ -171,19 +172,6 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       members,
       selectedAddons
     );
-
-    if (!service.requires_payment) {
-      const confirmed = await pool.query(updateOrderStatus, [order.id, "confirmed"]);
-      return success(
-        res,
-        {
-          order: { id: order.id, order_number: order.order_number, total_amount: totalAmount, status: confirmed.rows[0].status },
-          payment_required: false,
-        },
-        "Order created",
-        201
-      );
-    }
 
     let razorpayOrder;
     try {

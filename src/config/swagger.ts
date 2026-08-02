@@ -34,7 +34,7 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
     { name: "Categories" }, { name: "Types" }, { name: "Tags" },
     { name: "Services" }, { name: "Addons" }, { name: "Banners" },
     { name: "Home", description: "Home screen aggregator" },
-    { name: "Blogs" }, { name: "Aayojan" }, { name: "Coupons" },
+    { name: "Blogs" }, { name: "Aayojan" }, { name: "Coupons" }, { name: "Testimonials" },
     { name: "Checkout", description: "Order creation + Razorpay payment flow" },
     { name: "Bookings", description: "Customer-facing order/booking lifecycle" },
     { name: "Pandit", description: "Pandit self-service: profile, assignments, bookings" },

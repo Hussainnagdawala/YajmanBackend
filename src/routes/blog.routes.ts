@@ -48,6 +48,35 @@ router.get("/", validate(listBlogsQuerySchema, "query"), blogController.listBlog
 
 /**
  * @openapi
+ * /blogs/categories:
+ *   get:
+ *     tags: [Blogs]
+ *     summary: List active blog categories (for a category filter/nav)
+ *     responses:
+ *       200:
+ *         description: Blog categories fetched
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id: { type: string, format: uuid }
+ *                           name: { type: string }
+ *                           slug: { type: string }
+ *                           description: { type: string, nullable: true }
+ *                           display_order: { type: integer }
+ */
+router.get("/categories", blogController.listBlogCategoriesPublic);
+
+/**
+ * @openapi
  * /blogs/{slug}:
  *   get:
  *     tags: [Blogs]

@@ -69,6 +69,28 @@ export const maxAayojanEventImageOrder = `
   SELECT COALESCE(MAX(display_order), -1)::int AS max_order FROM aayojan_event_images WHERE event_id = $1
 `;
 
+// ─── Gallery images (page-level, standalone) ─────────────────
+
+export const listActiveAayojanGalleryImages = `
+  SELECT * FROM aayojan_gallery_images WHERE is_active = true ORDER BY display_order
+`;
+export const listAllAayojanGalleryImages = `SELECT * FROM aayojan_gallery_images ORDER BY display_order`;
+
+export const insertAayojanGalleryImage = `
+  INSERT INTO aayojan_gallery_images (image_url, display_order)
+  VALUES ($1, $2)
+  RETURNING *
+`;
+export const maxAayojanGalleryImageOrder = `
+  SELECT COALESCE(MAX(display_order), -1)::int AS max_order FROM aayojan_gallery_images
+`;
+
+export const findAayojanGalleryImageById = `SELECT * FROM aayojan_gallery_images WHERE id = $1`;
+export const softDeleteAayojanGalleryImage = `
+  UPDATE aayojan_gallery_images SET is_active = false WHERE id = $1 RETURNING *
+`;
+export const hardDeleteAayojanGalleryImage = `DELETE FROM aayojan_gallery_images WHERE id = $1 RETURNING *`;
+
 // ─── Banners ─────────────────────────────────────────────────
 
 export const listActiveAayojanBanners = `

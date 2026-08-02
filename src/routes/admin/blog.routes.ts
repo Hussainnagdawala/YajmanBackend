@@ -121,6 +121,33 @@ router.get("/", blogController.listBlogsAdmin);
 /**
  * @openapi
  * /admin/blogs/{id}:
+ *   get:
+ *     tags: [Admin: Blogs]
+ *     summary: Get a single blog post by id (any status — drafts/archived included), for the edit screen
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Blog found
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.get("/:id", blogController.getBlogAdmin);
+
+/**
+ * @openapi
+ * /admin/blogs/{id}:
  *   patch:
  *     tags: [Admin: Blogs]
  *     summary: Update a blog post (partial update; optionally replaces feature image and appends gallery images)

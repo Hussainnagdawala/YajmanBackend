@@ -29,6 +29,12 @@ import {
   updateAayojanBanner as updateAayojanBannerQuery,
   softDeleteAayojanBanner,
   hardDeleteAayojanBanner,
+  listActiveAayojanGalleryImages,
+  listAllAayojanGalleryImages,
+  insertAayojanGalleryImage,
+  maxAayojanGalleryImageOrder,
+  softDeleteAayojanGalleryImage,
+  hardDeleteAayojanGalleryImage,
 } from "../queries/aayojan.queries";
 import { listActiveTestimonials } from "../queries/home.queries";
 
@@ -38,11 +44,12 @@ type MulterS3Files = Record<string, Express.MulterS3.File[]>;
 
 export const getAayojan = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    const [content, events, banners, testimonials] = await Promise.all([
+    const [content, events, banners, testimonials, gallery] = await Promise.all([
       pool.query(listActiveAayojanContent),
       pool.query(listActiveAayojanEvents),
       pool.query(listActiveAayojanBanners),
       pool.query(listActiveTestimonials, ["aayojan"]),
+      pool.query(listActiveAayojanGalleryImages),
     ]);
 
     return success(res, {
@@ -50,6 +57,7 @@ export const getAayojan = async (_req: Request, res: Response, next: NextFunctio
       events: events.rows,
       banners: banners.rows,
       testimonials: testimonials.rows,
+      gallery: gallery.rows,
     });
   } catch (err) {
     next(err);
@@ -311,6 +319,58 @@ export const deleteAayojanBannerPermanently = async (req: Request, res: Response
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Aayojan banner not found", 404);
     if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
     return success(res, result.rows[0], "Aayojan banner permanently deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── Admin: gallery images (page-level, standalone) ───────────
+
+export const listAayojanGalleryAdmin = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(listAllAayojanGalleryImages);
+    return success(res, result.rows);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const createAayojanGalleryImages = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const files = (req.files as Express.MulterS3.File[] | undefined) ?? [];
+    if (files.length === 0) throw new AppError("VALIDATION_ERROR", "At least one image file is required", 400);
+
+    const maxOrder = await pool.query<{ max_order: number }>(maxAayojanGalleryImageOrder);
+    let nextOrder = maxOrder.rows[0].max_order + 1;
+    const inserted = [];
+    for (const file of files) {
+      const result = await pool.query(insertAayojanGalleryImage, [file.location, nextOrder]);
+      inserted.push(result.rows[0]);
+      nextOrder += 1;
+    }
+
+    return success(res, inserted, "Gallery images uploaded", 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteAayojanGalleryImage = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(softDeleteAayojanGalleryImage, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Gallery image not found", 404);
+    return success(res, result.rows[0], "Gallery image deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteAayojanGalleryImagePermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteAayojanGalleryImage, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Gallery image not found", 404);
+    if (result.rows[0].image_url) await deleteFromS3(result.rows[0].image_url);
+    return success(res, result.rows[0], "Gallery image permanently deleted");
   } catch (err) {
     next(err);
   }
