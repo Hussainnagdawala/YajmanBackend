@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationSchema } from "./common.schema";
+import { paginationSchema, strictBoolean } from "./common.schema";
 
 const jsonPreprocess = (val: unknown) => {
   if (typeof val === "string") {
@@ -55,14 +55,29 @@ const faqSchema = z.object({
   answer: z.string().trim().min(1),
 });
 
-export const createServiceSchema = z.object({
+// The admin form has sent `is_best_seller` (two words) while the schema/DB
+// column has always been `is_bestseller` (one word) — zod silently drops
+// unrecognized keys, so that field was a no-op: the toggle appeared to save
+// but never actually changed anything. Accept both spellings until the form
+// itself is fixed.
+const aliasBestSeller = (val: unknown) => {
+  if (val && typeof val === "object" && "is_best_seller" in val && !("is_bestseller" in (val as object))) {
+    const { is_best_seller, ...rest } = val as Record<string, unknown>;
+    return { ...rest, is_bestseller: is_best_seller };
+  }
+  return val;
+};
+
+export const createServiceSchema = z.preprocess(
+  aliasBestSeller,
+  z.object({
   title: z.string().trim().min(1).max(200),
   category_id: z.string().uuid(),
   type_ids: jsonArrayDefaulted(z.string().uuid()),
   tag_ids: jsonArrayDefaulted(z.string().uuid()),
   temple_ids: jsonArrayDefaulted(z.string().uuid()),
   addon_ids: jsonArrayDefaulted(z.string().uuid()),
-  is_addon_available: z.coerce.boolean().default(false),
+  is_addon_available: strictBoolean.default(false),
   benefits: jsonArrayDefaulted(z.string().trim().min(1)),
   price: blankToUndefined(z.coerce.number().nonnegative().optional()),
   original_price: blankToUndefined(z.coerce.number().positive().optional()),
@@ -80,28 +95,31 @@ export const createServiceSchema = z.object({
   availability_end_date: blankToUndefined(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
   booking_availability_type: blankToUndefined(z.enum(["all_day", "specific_day"]).default("all_day")),
   available_dates: jsonArrayDefaulted(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
-  is_featured: z.coerce.boolean().default(false),
-  is_bestseller: z.coerce.boolean().default(false),
+  is_featured: strictBoolean.default(false),
+  is_bestseller: strictBoolean.default(false),
   display_order: z.coerce.number().int().default(0),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
   key_features: jsonArrayDefaulted(z.string().trim().min(1)),
   packages: jsonArrayDefaulted(packageSchema),
   faqs: jsonArrayDefaulted(faqSchema),
-});
+  })
+);
 
 // Independent schema (not createServiceSchema.partial()) — partial() only makes
 // keys optional, it does not strip the .default()s above, which would otherwise
 // silently reset advance_booking_days/is_featured/is_bestseller/display_order/
 // every array field to their create-time defaults on every partial PATCH.
-export const updateServiceSchema = z.object({
+export const updateServiceSchema = z.preprocess(
+  aliasBestSeller,
+  z.object({
   title: z.string().trim().min(1).max(200).optional(),
   category_id: z.string().uuid().optional(),
   type_ids: jsonArrayOptional(z.string().uuid()),
   tag_ids: jsonArrayOptional(z.string().uuid()),
   temple_ids: jsonArrayOptional(z.string().uuid()),
   addon_ids: jsonArrayOptional(z.string().uuid()),
-  is_addon_available: z.coerce.boolean().optional(),
+  is_addon_available: strictBoolean.optional(),
   benefits: jsonArrayOptional(z.string().trim().min(1)),
   price: blankToUndefined(z.coerce.number().nonnegative().optional()),
   original_price: blankToUndefined(z.coerce.number().positive().optional()),
@@ -119,16 +137,17 @@ export const updateServiceSchema = z.object({
   availability_end_date: blankToUndefined(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
   booking_availability_type: blankToUndefined(z.enum(["all_day", "specific_day"]).optional()),
   available_dates: jsonArrayOptional(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)),
-  is_featured: z.coerce.boolean().optional(),
-  is_bestseller: z.coerce.boolean().optional(),
-  is_active: z.coerce.boolean().optional(),
+  is_featured: strictBoolean.optional(),
+  is_bestseller: strictBoolean.optional(),
+  is_active: strictBoolean.optional(),
   display_order: z.coerce.number().int().optional(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
   key_features: jsonArrayOptional(z.string().trim().min(1)),
   packages: jsonArrayOptional(packageSchema),
   faqs: jsonArrayOptional(faqSchema),
-});
+  })
+);
 
 export const listServicesQuerySchema = paginationSchema.extend({
   category: z.string().optional(),
@@ -138,8 +157,10 @@ export const listServicesQuerySchema = paginationSchema.extend({
   max_price: z.coerce.number().nonnegative().optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
   sort: z.enum(["price_asc", "price_desc", "rating", "newest", "title"]).optional(),
-  is_featured: z.coerce.boolean().optional(),
-  is_bestseller: z.coerce.boolean().optional(),
+  is_featured: strictBoolean.optional(),
+  is_bestseller: strictBoolean.optional(),
+  requires_pandit: strictBoolean.optional(),
+  requires_payment: strictBoolean.optional(),
 });
 
 export const listTrendingQuerySchema = paginationSchema;
@@ -147,8 +168,10 @@ export const listTrendingQuerySchema = paginationSchema;
 export const listServicesAdminQuerySchema = paginationSchema.extend({
   category_id: z.string().uuid().optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
-  is_active: z.coerce.boolean().optional(),
+  is_active: strictBoolean.optional(),
   sort: z.enum(["price_asc", "price_desc", "newest", "title"]).optional(),
+  requires_pandit: strictBoolean.optional(),
+  requires_payment: strictBoolean.optional(),
 });
 
 export const createTempleSchema = z.object({

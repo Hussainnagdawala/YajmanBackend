@@ -87,6 +87,16 @@ router.get("/", validate(listOrdersAdminQuerySchema, "query"), orderController.l
  *                         service_title: { type: string }
  *                         service_slug: { type: string }
  *                         cancelled_by_name: { type: string, nullable: true }
+ *                         assignment_status:
+ *                           type: string
+ *                           nullable: true
+ *                           enum: [pending, accepted, rejected, expired, completed]
+ *                           description: >
+ *                             Status of the latest pandit assignment (same as assignments[0].status,
+ *                             surfaced at top level for convenience). null if never assigned.
+ *                             order.status alone can't distinguish "pandit invited, awaiting
+ *                             response" from "pandit confirmed" from "pandit rejected/expired,
+ *                             needs reassignment" — it stays 'pandit_assigned' through all of them.
  *                         members:
  *                           type: array
  *                           items: { type: string }

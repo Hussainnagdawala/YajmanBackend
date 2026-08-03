@@ -50,6 +50,14 @@ const serviceUploads = uploadFields([
  *       - name: sort
  *         in: query
  *         schema: { type: string, enum: [price_asc, price_desc, newest, title] }
+ *       - name: requires_pandit
+ *         in: query
+ *         schema: { type: boolean }
+ *         description: Filter by the service's category flag (categories.requires_pandit)
+ *       - name: requires_payment
+ *         in: query
+ *         schema: { type: boolean }
+ *         description: Filter by the service's category flag (categories.requires_payment)
  *     responses:
  *       200:
  *         description: Services fetched

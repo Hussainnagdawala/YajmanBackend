@@ -39,6 +39,9 @@ export const createAssignment = async (req: Request, res: Response, next: NextFu
     const panditResult = await pool.query(findPanditProfileById, [pandit_id]);
     const pandit = panditResult.rows[0];
     if (!pandit) throw new AppError("NOT_FOUND", "Pandit profile not found", 404);
+    if (pandit.user_id === order.user_id) {
+      throw new AppError("VALIDATION_ERROR", "A pandit cannot be assigned to their own order", 400);
+    }
 
     const conflict = await pool.query(isPanditDoubleBooked, [pandit_id, order.booking_date, order.booking_time, null]);
     if (conflict.rows.length > 0) {
@@ -110,6 +113,9 @@ export const reassignPandit = async (req: Request, res: Response, next: NextFunc
     }
     if (!["pandit_assigned", "in_progress"].includes(order.status)) {
       throw new AppError("VALIDATION_ERROR", `Cannot reassign a pandit for an order with status '${order.status}'`, 400);
+    }
+    if (pandit.user_id === order.user_id) {
+      throw new AppError("VALIDATION_ERROR", "A pandit cannot be assigned to their own order", 400);
     }
 
     const conflict = await pool.query(isPanditDoubleBooked, [pandit_id, order.booking_date, order.booking_time, assignment.id]);

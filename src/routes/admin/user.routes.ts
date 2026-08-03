@@ -159,7 +159,12 @@ router.patch("/:id", validate(updateUserSchema), userController.updateUser);
  * /admin/users/{id}/status:
  *   patch:
  *     tags: [Admin: Users]
- *     summary: Update a user's account status
+ *     summary: >
+ *       Update a user's account status. If this deactivates/suspends a pandit who has
+ *       pending or accepted assignments, those are automatically freed (marked
+ *       rejected, reason "Pandit account suspended") and all admins are notified
+ *       to reassign — otherwise the work would stay stuck on someone who can no
+ *       longer log in to respond.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path

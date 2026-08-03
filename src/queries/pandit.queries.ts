@@ -137,6 +137,33 @@ export const reassignAssignment = `
   RETURNING *
 `;
 
+// Nobody ever set 'expired' before — a pandit who never opens the app just left
+// the assignment sitting as 'pending' forever past its 48h respond_by. Run by
+// the assignment-expiry cron. Order status is deliberately left untouched
+// (stays 'pandit_assigned') so /admin/pandit-assignments/:id/reassign keeps working.
+export const expireStaleAssignments = `
+  UPDATE pandit_assignments pa SET status = 'expired', updated_at = NOW()
+  FROM orders o
+  WHERE pa.order_id = o.id AND pa.status = 'pending' AND pa.respond_by < NOW()
+  RETURNING pa.id, pa.order_id, pa.pandit_id, o.order_number
+`;
+
+// Run when an admin suspends/deactivates a pandit's user account — any work
+// still pending/accepted on their profile needs to be freed for reassignment,
+// not left assigned to someone who can no longer log in to respond.
+export const freeAssignmentsForSuspendedPandit = `
+  UPDATE pandit_assignments pa SET
+    status = 'rejected',
+    rejected_at = NOW(),
+    rejection_reason = 'Pandit account suspended',
+    updated_at = NOW()
+  FROM pandit_profiles pp, orders o
+  WHERE pa.pandit_id = pp.id AND pp.user_id = $1
+    AND pa.order_id = o.id
+    AND pa.status IN ('pending', 'accepted')
+  RETURNING pa.id, pa.order_id, o.order_number
+`;
+
 export const findAcceptedAssignmentForPanditByOrder = `
   SELECT pa.* FROM pandit_assignments pa
   JOIN pandit_profiles pp ON pp.id = pa.pandit_id

@@ -50,7 +50,11 @@ export const completeOrder = `
 // ─── Admin: order management ─────────────────────────────────
 
 export const listOrdersAdmin = (whereClauses: string[], limitIdx: number, offsetIdx: number) => `
-  SELECT o.*, s.title AS service_title, s.slug AS service_slug
+  SELECT o.*, s.title AS service_title, s.slug AS service_slug,
+    (
+      SELECT pa.status FROM pandit_assignments pa
+      WHERE pa.order_id = o.id ORDER BY pa.assigned_at DESC LIMIT 1
+    ) AS assignment_status
   FROM orders o
   JOIN services s ON s.id = o.service_id
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
@@ -69,6 +73,14 @@ export const findOrderDetailAdmin = `
   SELECT o.*,
     s.title AS service_title, s.slug AS service_slug,
     cu.name AS cancelled_by_name,
+    -- Convenience copy of the latest row in assignments[] below — so the UI
+    -- can show "awaiting confirmation" vs "confirmed" vs "expired, needs
+    -- reassignment" without parsing the array. order.status alone can't tell
+    -- these apart — it stays 'pandit_assigned' through all of them.
+    (
+      SELECT pa.status FROM pandit_assignments pa
+      WHERE pa.order_id = o.id ORDER BY pa.assigned_at DESC LIMIT 1
+    ) AS assignment_status,
     COALESCE(
       (SELECT json_agg(om.name ORDER BY om.display_order) FROM order_members om WHERE om.order_id = o.id), '[]'
     ) AS members,

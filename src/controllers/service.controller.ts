@@ -128,6 +128,8 @@ export const listServicesPublic = async (req: Request, res: Response, next: Next
       sort?: string;
       is_featured?: boolean;
       is_bestseller?: boolean;
+      requires_pandit?: boolean;
+      requires_payment?: boolean;
     };
 
     const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
@@ -177,6 +179,14 @@ export const listServicesPublic = async (req: Request, res: Response, next: Next
     if (q.is_bestseller !== undefined) {
       values.push(q.is_bestseller);
       whereClauses.push(`s.is_bestseller = $${values.length}`);
+    }
+    if (q.requires_pandit !== undefined) {
+      values.push(q.requires_pandit);
+      whereClauses.push(`c.requires_pandit = $${values.length}`);
+    }
+    if (q.requires_payment !== undefined) {
+      values.push(q.requires_payment);
+      whereClauses.push(`c.requires_payment = $${values.length}`);
     }
 
     const sortMap: Record<string, string> = {
@@ -264,6 +274,8 @@ export const listServicesAdmin = async (req: Request, res: Response, next: NextF
       status?: string;
       is_active?: boolean;
       sort?: string;
+      requires_pandit?: boolean;
+      requires_payment?: boolean;
     };
 
     const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
@@ -285,6 +297,14 @@ export const listServicesAdmin = async (req: Request, res: Response, next: NextF
     if (q.search) {
       values.push(`%${q.search}%`);
       whereClauses.push(`s.title ILIKE $${values.length}`);
+    }
+    if (q.requires_pandit !== undefined) {
+      values.push(q.requires_pandit);
+      whereClauses.push(`c.requires_pandit = $${values.length}`);
+    }
+    if (q.requires_payment !== undefined) {
+      values.push(q.requires_payment);
+      whereClauses.push(`c.requires_payment = $${values.length}`);
     }
 
     const sortMap: Record<string, string> = {

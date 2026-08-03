@@ -302,6 +302,14 @@ router.get("/:slug", serviceController.getServiceBySlug);
  *       - in: query
  *         name: is_bestseller
  *         schema: { type: boolean }
+ *       - in: query
+ *         name: requires_pandit
+ *         schema: { type: boolean }
+ *         description: Filter by the service's category flag (categories.requires_pandit)
+ *       - in: query
+ *         name: requires_payment
+ *         schema: { type: boolean }
+ *         description: Filter by the service's category flag — false means enquiry-only (no checkout), see POST /services/{id}/inquiry
  *     responses:
  *       200:
  *         description: Services fetched

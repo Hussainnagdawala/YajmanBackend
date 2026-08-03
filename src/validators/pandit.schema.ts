@@ -55,6 +55,10 @@ export const rejectAssignmentSchema = z.object({
   reason: z.string().trim().min(1).max(1000),
 });
 
+export const withdrawAssignmentSchema = z.object({
+  reason: z.string().trim().min(1).max(1000),
+});
+
 export const listAssignmentsQuerySchema = paginationSchema.extend({
   status: z.enum(["pending", "accepted", "rejected", "expired", "completed"]).optional(),
 });

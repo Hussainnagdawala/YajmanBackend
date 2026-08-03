@@ -3,6 +3,7 @@ import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
+import { hoursUntil } from "../utils/date";
 import { createNotification } from "../services/notification.service";
 import { recalculatePanditStats } from "../services/stats.service";
 import { findUserById, listAdminUserIds } from "../queries/user.queries";
@@ -205,6 +206,49 @@ export const rejectAssignment = async (req: Request, res: Response, next: NextFu
     );
 
     return success(res, updated.rows[0], "Assignment rejected");
+  } catch (err) {
+    next(err);
+  }
+};
+
+// reject() only works pre-response (status 'pending'). Real pandits sometimes
+// need to back out AFTER already accepting (illness, emergency, etc.) — this
+// covers that gap. Reuses the same terminal state ('rejected') so it shows up
+// identically to admin as "needs reassignment," just with a different reason.
+const WITHDRAW_BLOCKED_ORDER_STATUSES = [
+  "completed", "cancelled", "refunded", "payment_failed", "refund_failed", "disputed",
+];
+
+export const withdrawAssignment = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const assignmentResult = await pool.query(findAssignmentForPandit, [req.params.id, req.user!.id]);
+    const assignment = assignmentResult.rows[0];
+    if (!assignment) throw new AppError("NOT_FOUND", "Assignment not found", 404);
+    if (assignment.status !== "accepted") {
+      throw new AppError(
+        "VALIDATION_ERROR",
+        `Cannot withdraw an assignment with status '${assignment.status}' — only an accepted assignment can be withdrawn`,
+        400
+      );
+    }
+
+    const orderResult = await pool.query(findOrderForAssignment, [assignment.order_id]);
+    const order = orderResult.rows[0];
+    if (WITHDRAW_BLOCKED_ORDER_STATUSES.includes(order.status)) {
+      throw new AppError("VALIDATION_ERROR", `Cannot withdraw — order status is '${order.status}'`, 400);
+    }
+
+    const reason = `Withdrawn after acceptance: ${req.body.reason}`;
+    const updated = await pool.query(updateAssignmentReject, [req.params.id, reason]);
+
+    const urgent = hoursUntil(new Date(order.booking_datetime)) < 24;
+    await notifyAllAdmins(
+      urgent ? "URGENT: Pandit withdrew — booking is within 24 hours" : "Pandit withdrew — reassignment needed",
+      `Pandit withdrew from order ${order.order_number} after accepting: ${req.body.reason}`,
+      order.id
+    );
+
+    return success(res, updated.rows[0], "Assignment withdrawn");
   } catch (err) {
     next(err);
   }

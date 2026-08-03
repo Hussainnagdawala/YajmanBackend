@@ -36,7 +36,10 @@ const router = Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
  *       400:
- *         description: Validation error, order not confirmed, or order's category does not require a pandit
+ *         description: >
+ *           Validation error, order not confirmed, order's category does not require a
+ *           pandit, or the pandit is the same user who placed the order (self-assignment
+ *           is blocked even though nothing stops a pandit from booking as a customer).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -130,7 +133,9 @@ router.get("/", validate(listAdminAssignmentsQuerySchema, "query"), assignmentCo
  *           application/json:
  *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
  *       400:
- *         description: Validation error or order status does not allow reassignment
+ *         description: >
+ *           Validation error, order status does not allow reassignment, or the new pandit
+ *           is the same user who placed the order (self-assignment is blocked).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorEnvelope' }

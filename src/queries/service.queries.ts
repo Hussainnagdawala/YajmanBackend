@@ -56,7 +56,7 @@ export const softDeleteService = `
 // ─── Services: public listing ───────────────────────────────
 
 export const listServices = (whereClauses: string[], orderBy: string, limitIdx: number, offsetIdx: number) => `
-  SELECT s.*, c.name AS category_name, c.slug AS category_slug
+  SELECT s.*, c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment
   FROM services s
   JOIN categories c ON c.id = s.category_id
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}

@@ -6,6 +6,7 @@ import {
   updatePanditProfileSchema,
   acceptAssignmentSchema,
   rejectAssignmentSchema,
+  withdrawAssignmentSchema,
   listAssignmentsQuerySchema,
   listPanditBookingsQuerySchema,
 } from "../validators/pandit.schema";
@@ -271,6 +272,59 @@ router.patch(
   requireRole("pandit"),
   validate(rejectAssignmentSchema),
   panditController.rejectAssignment
+);
+
+/**
+ * @openapi
+ * /pandit/assignments/{id}/withdraw:
+ *   patch:
+ *     tags: [Pandit]
+ *     summary: >
+ *       Back out of an assignment AFTER already accepting it (illness, emergency, etc).
+ *       Unlike reject (only valid while status is 'pending'), this only works on an
+ *       'accepted' assignment. Ends up in the same 'rejected' state either way, so
+ *       admin sees it identically as "needs reassignment" — just with a reason prefixed
+ *       "Withdrawn after acceptance". If the booking is within 24 hours, admins get an
+ *       urgent notification instead of the normal one.
+ *     description: Requires the "pandit" role — a customer token gets 403.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason: { type: string, minLength: 1, maxLength: 1000 }
+ *     responses:
+ *       200:
+ *         description: Assignment withdrawn
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       400:
+ *         description: Assignment isn't 'accepted', or the order is already in a terminal status
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.patch(
+  "/assignments/:id/withdraw",
+  requireRole("pandit"),
+  validate(withdrawAssignmentSchema),
+  panditController.withdrawAssignment
 );
 
 /**

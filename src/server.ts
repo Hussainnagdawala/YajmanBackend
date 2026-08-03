@@ -5,10 +5,12 @@ import { pool } from "./config/database";
 import { initFirebase } from "./config/firebase";
 import { startNotificationCron } from "./jobs/notification.cron";
 import { startOrderExpiryCron } from "./jobs/order-expiry.cron";
+import { startPanditAssignmentExpiryCron } from "./jobs/pandit-assignment-expiry.cron";
 
 initFirebase();
 startNotificationCron();
 startOrderExpiryCron();
+startPanditAssignmentExpiryCron();
 
 const server = app.listen(env.PORT, () => {
   logger.info(`Server running on port ${env.PORT} [${env.NODE_ENV}]`);
