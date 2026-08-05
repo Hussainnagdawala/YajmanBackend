@@ -35,6 +35,7 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
     { name: "Services" }, { name: "Addons" }, { name: "Banners" },
     { name: "Home", description: "Home screen aggregator" },
     { name: "Blogs" }, { name: "Aayojan" }, { name: "Coupons" }, { name: "Testimonials" },
+    { name: "Popular Searches" }, { name: "Gallery" },
     { name: "Checkout", description: "Order creation + Razorpay payment flow" },
     { name: "Bookings", description: "Customer-facing order/booking lifecycle" },
     { name: "Pandit", description: "Pandit self-service: profile, assignments, bookings" },
@@ -47,7 +48,7 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
     { name: "Admin: Reviews" }, { name: "Admin: Invoices" }, { name: "Admin: Pandit Assignments" },
     { name: "Admin: Pandits" }, { name: "Admin: Contact Entries" }, { name: "Admin: Dashboard" },
     { name: "Admin: Orders" }, { name: "Admin: Notifications" }, { name: "Admin: App Settings" },
-    { name: "Admin: Addons" },
+    { name: "Admin: Addons" }, { name: "Admin: Gallery" },
   ],
   components: {
     securitySchemes: {

@@ -37,6 +37,21 @@ import { listBestsellers } from "../queries/service.queries";
 
 type MulterS3File = Express.MulterS3.File;
 
+// ─── Public: popular searches ────────────────────────────────
+
+export const listPopularSearchesPublic = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const result = await pool.query(listActivePopularSearches);
+    return success(res, result.rows);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── Public: testimonials ──────────────────────────────────────
 
 export const listTestimonialsPublic = async (

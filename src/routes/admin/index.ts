@@ -24,6 +24,7 @@ import orderRoutes from "./order.routes";
 import notificationRoutes from "./notification.routes";
 import settingsRoutes from "./settings.routes";
 import addonRoutes from "./addon.routes";
+import galleryRoutes from "./gallery.routes";
 
 const router = Router();
 
@@ -52,5 +53,6 @@ router.use("/orders", orderRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/app-settings", settingsRoutes);
 router.use("/addons", addonRoutes);
+router.use("/gallery", galleryRoutes);
 
 export default router;
