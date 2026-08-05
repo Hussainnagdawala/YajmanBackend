@@ -1,6 +1,7 @@
 import { Router } from "express";
 import * as blogController from "../controllers/blog.controller";
 import { validate } from "../middleware/validate";
+import { optionalAuthenticate } from "../middleware/auth";
 import { listBlogsQuerySchema } from "../validators/blog.schema";
 
 const router = Router();
@@ -80,7 +81,10 @@ router.get("/categories", blogController.listBlogCategoriesPublic);
  * /blogs/{slug}:
  *   get:
  *     tags: [Blogs]
- *     summary: Get a published blog by slug
+ *     summary: >
+ *       Get a published blog by slug. Records a view event for analytics — bearer
+ *       token optional (attributed to the user if a valid one is sent, otherwise
+ *       tracked anonymously via an IP+User-Agent fingerprint).
  *     parameters:
  *       - in: path
  *         name: slug
@@ -95,6 +99,6 @@ router.get("/categories", blogController.listBlogCategoriesPublic);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:slug", blogController.getBlogBySlug);
+router.get("/:slug", optionalAuthenticate, blogController.getBlogBySlug);
 
 export default router;

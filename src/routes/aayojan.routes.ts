@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as aayojanController from "../controllers/aayojan.controller";
 import * as contactController from "../controllers/contact.controller";
 import { validate } from "../middleware/validate";
+import { optionalAuthenticate } from "../middleware/auth";
 import { createAayojanContactSchema } from "../validators/contact.schema";
 
 const router = Router();
@@ -38,7 +39,10 @@ router.get("/", aayojanController.getAayojan);
  * /aayojan/events/{slug}:
  *   get:
  *     tags: [Aayojan]
- *     summary: Get an Aayojan event by slug
+ *     summary: >
+ *       Get an Aayojan event by slug. Records a view event for analytics — bearer
+ *       token optional (attributed to the user if a valid one is sent, otherwise
+ *       tracked anonymously via an IP+User-Agent fingerprint).
  *     parameters:
  *       - in: path
  *         name: slug
@@ -53,7 +57,7 @@ router.get("/", aayojanController.getAayojan);
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/events/:slug", aayojanController.getAayojanEventBySlug);
+router.get("/events/:slug", optionalAuthenticate, aayojanController.getAayojanEventBySlug);
 
 /**
  * @openapi

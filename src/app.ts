@@ -12,6 +12,12 @@ import routes from "./routes";
 
 export const app = express();
 
+// Trust the first hop (reverse proxy / load balancer) so req.ip reflects the
+// real client IP instead of the proxy's — needed for view-tracking's IP+UA
+// visitor fingerprint to actually distinguish visitors instead of collapsing
+// everyone behind the same proxy into one.
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(cors()
   // cors({

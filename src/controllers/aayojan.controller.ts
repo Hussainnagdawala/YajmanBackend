@@ -4,6 +4,7 @@ import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
+import { trackView } from "../services/analytics.service";
 import {
   listActiveAayojanContent,
   listAllAayojanContent,
@@ -68,6 +69,7 @@ export const getAayojanEventBySlug = async (req: Request, res: Response, next: N
   try {
     const result = await pool.query(findAayojanEventBySlug, [req.params.slug]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Event not found", 404);
+    trackView(req, "aayojan_event", result.rows[0].id);
     return success(res, result.rows[0]);
   } catch (err) {
     next(err);

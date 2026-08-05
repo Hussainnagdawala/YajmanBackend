@@ -6,6 +6,7 @@ import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
+import { trackView } from "../services/analytics.service";
 import { findCategoryFlags } from "../queries/category.queries";
 import {
   createService as createServiceQuery,
@@ -216,6 +217,7 @@ export const getServiceBySlug = async (req: Request, res: Response, next: NextFu
   try {
     const result = await pool.query(findServiceBySlug, [req.params.slug]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
+    trackView(req, "service", result.rows[0].id);
     return success(res, result.rows[0]);
   } catch (err) {
     next(err);

@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import * as serviceController from "../controllers/service.controller";
 import * as reviewController from "../controllers/review.controller";
 import * as contactController from "../controllers/contact.controller";
-import { authenticate } from "../middleware/auth";
+import { authenticate, optionalAuthenticate } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { uploadArray } from "../middleware/upload";
 import { listServicesQuerySchema, listTrendingQuerySchema } from "../validators/service.schema";
@@ -239,7 +239,11 @@ router.post("/:id/inquiry", validate(createServiceInquirySchema), contactControl
  * /services/{slug}:
  *   get:
  *     tags: [Services]
- *     summary: Get a published service's full detail by slug
+ *     summary: >
+ *       Get a published service's full detail by slug. Records a view event for
+ *       analytics — bearer token optional (not required to view, but if a valid
+ *       one is sent the view is attributed to that user; otherwise it's tracked
+ *       anonymously via an IP+User-Agent fingerprint).
  *     parameters:
  *       - in: path
  *         name: slug
@@ -254,7 +258,7 @@ router.post("/:id/inquiry", validate(createServiceInquirySchema), contactControl
  *       404:
  *         $ref: '#/components/responses/NotFound'
  */
-router.get("/:slug", serviceController.getServiceBySlug);
+router.get("/:slug", optionalAuthenticate, serviceController.getServiceBySlug);
 
 /**
  * @openapi

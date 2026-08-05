@@ -6,6 +6,7 @@ import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
+import { trackView } from "../services/analytics.service";
 import {
   listActiveBlogCategories,
   listAllBlogCategories,
@@ -200,6 +201,7 @@ export const getBlogBySlug = async (req: Request, res: Response, next: NextFunct
     ]);
     if (!blogResult.rows[0]) throw new AppError("NOT_FOUND", "Blog not found", 404);
 
+    trackView(req, "blog", blogResult.rows[0].id);
     return success(res, { ...blogResult.rows[0], sidebar_services: sidebarResult.rows });
   } catch (err) {
     next(err);

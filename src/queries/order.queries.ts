@@ -213,6 +213,55 @@ export const dashboardRecentOrders = `
   LIMIT 10
 `;
 
+export const dashboardActiveServices = `
+  SELECT COUNT(*)::int AS count FROM services WHERE is_active = true AND status = 'published'
+`;
+
+export const dashboardCustomerCounts = `
+  SELECT
+    COUNT(*)::int AS total,
+    COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '30 days')::int AS active,
+    COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)::int AS new_today,
+    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS new_this_week,
+    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS new_this_month
+  FROM users WHERE role = 'customer'
+`;
+
+// "Real" bookings only — pending/payment_failed orders never became one.
+export const dashboardAvgOrderValue = `
+  SELECT COALESCE(AVG(total_amount), 0)::float AS avg
+  FROM orders WHERE status NOT IN ('pending', 'payment_failed')
+`;
+
+export const dashboardCancellationRate = `
+  SELECT ROUND(
+    (COUNT(*) FILTER (WHERE status IN ('cancelled', 'refunded', 'refund_failed')))::numeric
+    / NULLIF(COUNT(*) FILTER (WHERE status != 'pending'), 0), 4
+  ) AS rate
+  FROM orders
+`;
+
+// A payment's status moves from 'captured' straight to 'refunded' on refund
+// (same row updated in place) — "ever captured" population is both statuses.
+export const dashboardRefundRate = `
+  SELECT ROUND(
+    (COUNT(*) FILTER (WHERE status = 'refunded'))::numeric
+    / NULLIF(COUNT(*) FILTER (WHERE status IN ('captured', 'refunded')), 0), 4
+  ) AS rate
+  FROM payments
+`;
+
+export const dashboardRepeatCustomerRate = `
+  SELECT ROUND(
+    (COUNT(*) FILTER (WHERE order_count > 1))::numeric / NULLIF(COUNT(*), 0), 4
+  ) AS rate
+  FROM (
+    SELECT user_id, COUNT(*) AS order_count FROM orders
+    WHERE status NOT IN ('pending', 'payment_failed')
+    GROUP BY user_id
+  ) per_customer
+`;
+
 export const dashboardPendingAssignments = `
   SELECT pa.id, pa.respond_by, o.order_number, pp.display_name AS pandit_name
   FROM pandit_assignments pa

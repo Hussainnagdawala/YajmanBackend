@@ -1,5 +1,6 @@
 import { Router } from "express";
 import * as userController from "../../controllers/admin/user.controller";
+import * as dashboardController from "../../controllers/admin/dashboard.controller";
 import { validate } from "../../middleware/validate";
 import {
   createUserSchema,
@@ -7,6 +8,7 @@ import {
   updateUserStatusSchema,
   listUsersQuerySchema,
 } from "../../validators/profile.schema";
+import { userViewHistoryQuerySchema } from "../../validators/dashboard.schema";
 
 const router = Router();
 
@@ -196,5 +198,75 @@ router.patch("/:id", validate(updateUserSchema), userController.updateUser);
  *         $ref: '#/components/responses/NotFound'
  */
 router.patch("/:id/status", validate(updateUserStatusSchema), userController.updateUserStatus);
+
+/**
+ * @openapi
+ * /admin/users/{id}/views:
+ *   get:
+ *     tags: [Admin: Users]
+ *     summary: >
+ *       This user's page-view history — which services/events/blogs they've looked
+ *       at while logged in (paginated, newest first) plus a grouped "most viewed"
+ *       summary. Only covers views made while authenticated as this user — an
+ *       anonymous visit (before login, or a session that never sent a token) has
+ *       no user_id to attribute to this account.
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, minimum: 1, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+ *     responses:
+ *       200:
+ *         description: View history fetched
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/SuccessEnvelope'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         visits:
+ *                           type: array
+ *                           description: Raw view events, newest first
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               id: { type: string, format: uuid }
+ *                               entity_type: { type: string, enum: [service, aayojan_event, blog] }
+ *                               entity_id: { type: string, format: uuid }
+ *                               entity_title: { type: string, nullable: true }
+ *                               entity_slug: { type: string, nullable: true }
+ *                               event_type: { type: string, example: view }
+ *                               created_at: { type: string, format: date-time }
+ *                         most_viewed:
+ *                           type: array
+ *                           description: Grouped by entity, top 20 by view count
+ *                           items:
+ *                             type: object
+ *                             properties:
+ *                               entity_type: { type: string }
+ *                               entity_id: { type: string, format: uuid }
+ *                               entity_title: { type: string, nullable: true }
+ *                               entity_slug: { type: string, nullable: true }
+ *                               view_count: { type: integer }
+ *                               last_viewed_at: { type: string, format: date-time }
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.get("/:id/views", validate(userViewHistoryQuerySchema, "query"), dashboardController.getUserViewHistory);
 
 export default router;
