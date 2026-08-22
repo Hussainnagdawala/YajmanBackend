@@ -21,9 +21,10 @@ function querySql(sql, description) {
   });
 
   if (result.status !== 0) {
-    throw new Error(`Failed to ${description}.`);
-  }
-
+  console.error("PostgreSQL error:", result.stderr);
+  console.error("PostgreSQL output:", result.stdout);
+  throw new Error(`Failed to ${description}.`);
+}
   return result.stdout.trim();
 }
 
@@ -40,8 +41,8 @@ try {
     
     // Insert admin user directly
     const insertAdminSql = `
-      INSERT INTO users (phone, country_code, name, email, role, status, is_verified) 
-      VALUES ('${adminPhone}', '+91', 'Yajman Admin', 'admin@yajmanapp.in', 'admin', 'active', true);
+      INSERT INTO users (phone, country_code, name, email, role, status) 
+      VALUES ('${adminPhone}', '+91', 'Yajman Admin', 'admin@yajmanapp.in', 'admin', 'active');
     `;
     
     querySql(insertAdminSql, "insert admin user");
