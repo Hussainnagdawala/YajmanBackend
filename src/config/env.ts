@@ -34,10 +34,12 @@ const envSchema = z.object({
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1, "RAZORPAY_WEBHOOK_SECRET is required"),
 
-  AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required"),
-  AWS_SECRET_ACCESS_KEY: z.string().min(1, "AWS_SECRET_ACCESS_KEY is required"),
-  AWS_REGION: z.string().default("ap-south-1"),
-  S3_BUCKET: z.string().min(1, "S3_BUCKET is required"),
+  DO_SPACES_KEY: z.string().min(1, "DO_SPACES_KEY is required"),
+  DO_SPACES_SECRET: z.string().min(1, "DO_SPACES_SECRET is required"),
+  DO_SPACES_ENDPOINT: z.string().min(1, "DO_SPACES_ENDPOINT is required"),
+  DO_SPACES_BUCKET: z.string().min(1, "DO_SPACES_BUCKET is required"),
+  DO_PARENT_FOLDER: z.string().default("YJ-stagging"),
+
 
   FRONTEND_URL: z.string().default("http://localhost:3000"),
   ADMIN_PORTAL_URL: z.string().default("http://localhost:3002"),

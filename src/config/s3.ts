@@ -2,9 +2,10 @@ import { S3Client } from "@aws-sdk/client-s3";
 import { env } from "./env";
 
 export const s3Client = new S3Client({
-  region: env.AWS_REGION,
+  endpoint: env.DO_SPACES_ENDPOINT,
+  region: "us-east-1", // DO Spaces fallback region
   credentials: {
-    accessKeyId: env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: env.DO_SPACES_KEY,
+    secretAccessKey: env.DO_SPACES_SECRET,
   },
 });

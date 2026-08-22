@@ -1,9 +1,11 @@
 node_modules/
 dist/
 .env
+.env-prod
 .env.example
 logs/*.log
 .DS_Store
 package-lock.json
 uploads/*
 !uploads/.gitkeep
+dump/

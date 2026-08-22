@@ -2,17 +2,15 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { RequestHandler, Request, Response, NextFunction } from "express";
-// import multerS3 from "multer-s3";
-// import { s3Client } from "../config/s3";
+import multerS3 from "multer-s3";
+import { s3Client } from "../config/s3";
 import { env } from "../config/env";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
 
-// ── LOCAL DISK STORAGE (active) ──────────────────────────────
-// Temporary stand-in for S3 until real AWS credentials exist. Files land in
-// ./uploads/<folder>/ and are served back by app.ts's express.static mount.
-const storage = multer.diskStorage({
+// ── LOCAL DISK STORAGE (disabled) ────────────────────────────
+/* const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
     const folder = req.uploadFolder || "general";
     const dir = path.join(UPLOAD_ROOT, folder);
@@ -22,23 +20,22 @@ const storage = multer.diskStorage({
   filename: (_req, file, cb) => {
     cb(null, `${Date.now()}-${file.originalname}`);
   },
+}); */
+
+// ── S3 STORAGE (active) ──────────────────────────────────────
+const s3Storage = multerS3({
+  s3: s3Client,
+  bucket: env.DO_SPACES_BUCKET,
+  acl: "public-read",
+  key: (req, file, cb) => {
+    const folder = req.uploadFolder || "general";
+    const filename = `${env.DO_PARENT_FOLDER}/${folder}/${Date.now()}-${file.originalname}`;
+    cb(null, filename);
+  },
 });
 
-// ── S3 STORAGE (disabled) ────────────────────────────────────
-// To switch back: uncomment this block, delete the diskStorage block above,
-// and set `storage: s3Storage` in the multer() call below.
-// const s3Storage = multerS3({
-//   s3: s3Client,
-//   bucket: env.S3_BUCKET,
-//   key: (req, file, cb) => {
-//     const folder = req.uploadFolder || "general";
-//     const filename = `${folder}/${Date.now()}-${file.originalname}`;
-//     cb(null, filename);
-//   },
-// });
-
 const upload = multer({
-  storage,
+  storage: s3Storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     cb(null, ALLOWED_MIME_TYPES.includes(file.mimetype));
@@ -70,7 +67,7 @@ const wrap = (mw: RequestHandler): RequestHandler =>
   ((req: Request, res: Response, next: NextFunction) => {
     mw(req, res, (err: unknown) => {
       if (err) return next(err);
-      attachLocation(req);
+      // attachLocation(req); // Removed for S3 since multer-s3 provides .location directly
       next();
     });
   }) as unknown as RequestHandler;

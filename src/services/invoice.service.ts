@@ -1,8 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import PDFDocument from "pdfkit";
-// import { PutObjectCommand } from "@aws-sdk/client-s3";
-// import { s3Client } from "../config/s3";
+import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { s3Client } from "../config/s3";
 import { env } from "../config/env";
 import { pool } from "../config/database";
 import { countInvoicesThisYear } from "../queries/invoice.queries";
@@ -91,28 +91,26 @@ export const generateInvoicePdf = (data: InvoiceData): Promise<Buffer> => {
   });
 };
 
-// ── LOCAL DISK UPLOAD (active) ───────────────────────────────
-// Temporary stand-in for S3 until real AWS credentials exist, see
-// middleware/upload.ts's storage swap for the same pattern.
-export const uploadInvoicePdf = async (buffer: Buffer, invoiceNumber: string): Promise<string> => {
+// ── LOCAL DISK UPLOAD (disabled) ─────────────────────────────
+/* export const uploadInvoicePdf = async (buffer: Buffer, invoiceNumber: string): Promise<string> => {
   const dir = path.join(process.cwd(), "uploads", "invoices");
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, `${invoiceNumber}.pdf`), buffer);
   return `http://localhost:${env.PORT}/uploads/invoices/${invoiceNumber}.pdf`;
-};
+}; */
 
-// ── S3 UPLOAD (disabled) ─────────────────────────────────────
-// To switch back: uncomment this, delete the local-disk version above, and
-// restore the two commented imports at the top of this file.
-// export const uploadInvoicePdf = async (buffer: Buffer, invoiceNumber: string): Promise<string> => {
-//   const key = `invoices/${invoiceNumber}.pdf`;
-//   await s3Client.send(
-//     new PutObjectCommand({
-//       Bucket: env.S3_BUCKET,
-//       Key: key,
-//       Body: buffer,
-//       ContentType: "application/pdf",
-//     })
-//   );
-//   return `https://${env.S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
-// };
+// ── S3 UPLOAD (active) ───────────────────────────────────────
+export const uploadInvoicePdf = async (buffer: Buffer, invoiceNumber: string): Promise<string> => {
+  const key = `${env.DO_PARENT_FOLDER}/invoices/${invoiceNumber}.pdf`;
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: env.DO_SPACES_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: "application/pdf",
+    })
+  );
+  
+  const domain = env.DO_SPACES_ENDPOINT.replace(/^https?:\/\//, "");
+  return `https://${env.DO_SPACES_BUCKET}.${domain}/${key}`;
+};
