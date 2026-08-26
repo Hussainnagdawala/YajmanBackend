@@ -10,7 +10,12 @@ const blankToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((val) => (val === "" ? undefined : val), schema);
 
 const aayojanPricingRefine = (data: { price?: number; original_price?: number }, ctx: z.RefinementCtx) => {
-  if (data.original_price != null && data.price != null && data.original_price <= data.price) {
+  if (
+    data.original_price != null &&
+    data.original_price > 0 &&
+    data.price != null &&
+    data.original_price <= data.price
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["original_price"],

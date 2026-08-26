@@ -32,10 +32,17 @@ export const optionalPriceSchema = z.coerce
   .nonnegative("Price cannot be negative")
   .optional();
 
-export const optionalOriginalPriceSchema = z.coerce
-  .number({ invalid_type_error: "Original price must be a valid number" })
-  .positive("Original price must be greater than zero")
-  .optional();
+export const optionalOriginalPriceSchema = z.preprocess(
+  (val) => {
+    if (val === "" || val === null || val === undefined) return undefined;
+    if (val === 0 || val === "0") return undefined;
+    return val;
+  },
+  z.coerce
+    .number({ invalid_type_error: "Original price must be a valid number" })
+    .positive("Original price must be greater than zero")
+    .optional()
+);
 
 // z.coerce.boolean() is broken for query strings and multipart form fields —
 // it's just JS `Boolean(x)`, so the STRING "false" (a non-empty string) coerces

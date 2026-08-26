@@ -188,6 +188,9 @@ const formatIssueMessage = (issue: ZodIssue, fieldLabel: string): string => {
         return `${fieldLabel} must contain at least ${issue.minimum} items`;
       }
       if (issue.type === "number") {
+        if (issue.minimum === 0 && "inclusive" in issue && issue.inclusive === false) {
+          return `${fieldLabel} must be greater than zero`;
+        }
         return `${fieldLabel} must be at least ${issue.minimum}`;
       }
       return issue.message;
