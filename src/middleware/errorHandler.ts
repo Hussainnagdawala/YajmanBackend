@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { AppError } from "../utils/errors";
 import { error } from "../utils/response";
 import { logger } from "../config/logger";
+import { formatZodIssues, summarizeValidationErrors } from "../utils/zod-errors";
 
 interface PgError {
   code: string;
@@ -19,35 +20,63 @@ const PG_CHECK_VIOLATION = "23514";
 const PG_INVALID_TEXT_REPRESENTATION = "22P02";
 const PG_STRING_DATA_RIGHT_TRUNCATION = "22001";
 
+const serializeError = (err: unknown) => {
+  if (err instanceof Error) {
+    return { message: err.message, stack: err.stack, name: err.name };
+  }
+  return { message: String(err) };
+};
+
+const isDatabaseConnectionError = (err: unknown): boolean => {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return (
+    msg.includes("connect econnrefused") ||
+    msg.includes("does not support ssl") ||
+    msg.includes("connection terminated") ||
+    msg.includes("password authentication failed") ||
+    msg.includes("getaddrinfo") ||
+    msg.includes("timeout") ||
+    msg.includes("no pg_hba.conf entry")
+  );
+};
+
 export const errorHandler = (err: unknown, req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof AppError) {
-    return error(res, err.message, err.status, err.code);
+    return error(res, err.message, err.status, err.code, err.details);
   }
 
   if (err instanceof ZodError) {
-    const details = err.issues.map((issue) => ({
-      field: issue.path.join(".") || "(root)",
-      message: issue.message,
-    }));
-    return error(res, "Validation failed", 422, "VALIDATION_ERROR", details);
+    const details = formatZodIssues(err.issues);
+    return error(res, summarizeValidationErrors(details), 422, "VALIDATION_ERROR", details);
   }
 
   if (isPgError(err)) {
     switch (err.code) {
       case PG_UNIQUE_VIOLATION:
-        return error(res, "A record with this value already exists", 409, "CONFLICT");
+        return error(res, "A record with this value already exists. Please use a different value.", 409, "CONFLICT");
       case PG_FOREIGN_KEY_VIOLATION:
-        return error(res, "Referenced record does not exist or is still in use", 409, "CONFLICT");
+        return error(res, "The referenced item does not exist or is still in use.", 409, "CONFLICT");
       case PG_CHECK_VIOLATION:
-        return error(res, "Value violates a database constraint", 400, "VALIDATION_ERROR");
+        return error(res, "One of the values you entered is not allowed.", 400, "VALIDATION_ERROR");
       case PG_INVALID_TEXT_REPRESENTATION:
-        return error(res, "Invalid value format", 400, "VALIDATION_ERROR");
+        return error(res, "One of the values has an invalid format. Please check your input.", 400, "VALIDATION_ERROR");
       case PG_STRING_DATA_RIGHT_TRUNCATION:
-        return error(res, "Value too long for field", 400, "VALIDATION_ERROR");
+        return error(res, "One of the values is too long. Please shorten it and try again.", 400, "VALIDATION_ERROR");
     }
   }
 
-  logger.error("Unhandled error", { err, path: req.path, method: req.method });
+  if (isDatabaseConnectionError(err)) {
+    logger.error("Database connection error", { ...serializeError(err), path: req.path, method: req.method });
+    return error(
+      res,
+      "Unable to connect to the database. Please ensure PostgreSQL is running and DATABASE_URL is correct.",
+      503,
+      "DATABASE_UNAVAILABLE"
+    );
+  }
+
+  logger.error("Unhandled error", { ...serializeError(err), path: req.path, method: req.method });
   return error(res, "Internal server error", 500, "INTERNAL_ERROR");
 };
 

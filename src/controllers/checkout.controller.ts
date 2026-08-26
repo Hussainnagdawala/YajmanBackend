@@ -111,10 +111,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       (service.availability_start_date && booking_date < service.availability_start_date) ||
       (service.availability_end_date && booking_date > service.availability_end_date)
     ) {
-      throw new AppError("VALIDATION_ERROR", "Booking date is outside the service's availability period", 400);
+      throw new AppError("VALIDATION_ERROR", "The selected booking date is outside this service's availability period", 400, [
+        { field: "booking_date", message: "Please choose a date within the service's available date range" },
+      ]);
     }
     if (service.booking_availability_type === "specific_day" && !service.available_dates.includes(booking_date)) {
-      throw new AppError("VALIDATION_ERROR", "Selected date is not available for this service", 400);
+      throw new AppError("VALIDATION_ERROR", "The selected date is not available for this service", 400, [
+        { field: "booking_date", message: "Please choose one of the dates listed as available for this service" },
+      ]);
     }
 
     const bookingDateTime = computeBookingDateTime(booking_date, booking_time, service.advance_booking_days);
@@ -124,13 +128,17 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     let selectedAddons: SelectedAddon[] = [];
     if (requestedAddonIds.length > 0) {
       if (!service.is_addon_available) {
-        throw new AppError("VALIDATION_ERROR", "Addons are not available for this service", 400);
+        throw new AppError("VALIDATION_ERROR", "Add-ons are not available for this service", 400, [
+          { field: "addon_ids", message: "This service does not offer add-ons" },
+        ]);
       }
       const availableAddons = (await pool.query(listAddonsForService, [service_id])).rows;
       const availableById = new Map(availableAddons.map((a) => [a.id, a]));
       for (const id of requestedAddonIds) {
         if (!availableById.has(id)) {
-          throw new AppError("VALIDATION_ERROR", `Addon ${id} is not available for this service`, 400);
+          throw new AppError("VALIDATION_ERROR", "One or more selected add-ons are not available for this service", 400, [
+            { field: "addon_ids", message: `Add-on '${id}' is not available for this service` },
+          ]);
         }
       }
       selectedAddons = requestedAddonIds.map((id) => {

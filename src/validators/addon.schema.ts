@@ -2,14 +2,18 @@ import { z } from "zod";
 
 export const createAddonSchema = z
   .object({
-    name: z.string().trim().min(1).max(100),
-    price: z.coerce.number().nonnegative().optional(),
+    name: z.string().trim().min(1, "Name is required").max(100, "Name must be at most 100 characters"),
+    price: z.coerce.number({ invalid_type_error: "Price must be a valid number" }).nonnegative("Price cannot be negative").optional(),
     is_free: z.coerce.boolean().default(false),
     display_order: z.coerce.number().int().default(0),
   })
   .superRefine((data, ctx) => {
     if (!data.is_free && !(data.price && data.price > 0)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["price"], message: "Required unless is_free is true" });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["price"],
+        message: "Price is required unless the add-on is marked as free",
+      });
     }
   });
 

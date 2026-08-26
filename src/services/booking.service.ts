@@ -12,11 +12,15 @@ export const computeBookingDateTime = (bookingDate: string, bookingTime: string,
   const bookingDateTime = toISTDateTime(bookingDate, bookingTime);
 
   if (isPast(bookingDateTime)) {
-    throw new AppError("VALIDATION_ERROR", "Booking date cannot be in the past", 400);
+    throw new AppError("VALIDATION_ERROR", "Booking date cannot be in the past", 400, [
+      { field: "booking_date", message: "Please choose a future date for your booking" },
+    ]);
   }
   const minAdvanceHours = advanceBookingDays * 24;
   if (hoursUntil(bookingDateTime) < minAdvanceHours) {
-    throw new AppError("BOOKING_TOO_CLOSE", `Booking must be at least ${advanceBookingDays} day(s) in advance`, 400);
+    throw new AppError("BOOKING_TOO_CLOSE", `Booking must be at least ${advanceBookingDays} day(s) in advance`, 400, [
+      { field: "booking_date", message: `Please book at least ${advanceBookingDays} day(s) before the service date` },
+    ]);
   }
 
   return bookingDateTime;

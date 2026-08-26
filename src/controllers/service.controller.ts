@@ -347,7 +347,11 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     const files = req.files as MulterS3Files | undefined;
     const featureImage = files?.feature_image?.[0];
     // const featureImage = { location: 'ads' }
-    if (!featureImage) throw new AppError("VALIDATION_ERROR", "feature_image file is required", 400);
+    if (!featureImage) {
+      throw new AppError("VALIDATION_ERROR", "Feature image is required", 400, [
+        { field: "feature_image", message: "Please upload a feature image for this service" },
+      ]);
+    }
 
     const {
       title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, benefits, price, original_price,
@@ -363,7 +367,9 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     const { requires_payment, requires_pandit } = categoryFlags.rows[0];
 
     if (requires_payment && !(price && price > 0)) {
-      throw new AppError("VALIDATION_ERROR", "This category requires a price", 400);
+      throw new AppError("VALIDATION_ERROR", "This category requires a selling price", 400, [
+        { field: "price", message: "Please enter a price greater than zero for services in this category" },
+      ]);
     }
     const finalPrice = requires_payment ? price : null;
     const finalIsAddonAvailable = requires_pandit ? is_addon_available : false;
@@ -466,7 +472,9 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     if (requires_payment) {
       const effectivePrice = rest.price !== undefined ? rest.price : existing.rows[0].price;
       if (!(effectivePrice && effectivePrice > 0)) {
-        throw new AppError("VALIDATION_ERROR", "This category requires a price", 400);
+        throw new AppError("VALIDATION_ERROR", "This category requires a selling price", 400, [
+          { field: "price", message: "Please enter a price greater than zero for services in this category" },
+        ]);
       }
       if (type_ids !== undefined) setField("type_id", type_ids[0] ?? null);
     } else {
