@@ -43,7 +43,7 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
     { name: "Admin: Users" }, { name: "Admin: Categories" }, { name: "Admin: Types" },
     { name: "Admin: Tags" }, { name: "Admin: Services" }, { name: "Admin: Temples" },
     { name: "Admin: Banners" }, { name: "Admin: Popular Searches" }, { name: "Admin: Testimonials" },
-    { name: "Admin: Recommended Services" }, { name: "Admin: Blogs" }, { name: "Admin: Blog Categories" },
+    { name: "Admin: Service Placements" }, { name: "Service Placements" }, { name: "Admin: Blogs" }, { name: "Admin: Blog Categories" },
     { name: "Admin: Blog Authors" }, { name: "Admin: Aayojan" }, { name: "Admin: Coupons" },
     { name: "Admin: Reviews" }, { name: "Admin: Invoices" }, { name: "Admin: Pandit Assignments" },
     { name: "Admin: Pandits" }, { name: "Admin: Contact Entries" }, { name: "Admin: Dashboard" },

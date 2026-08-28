@@ -8,11 +8,13 @@ import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
 import { trackView } from "../services/analytics.service";
 import { findCategoryFlags } from "../queries/category.queries";
+import { findPujaProcessByIdSimple } from "../queries/puja-process.queries";
 import {
   createService as createServiceQuery,
   updateService as updateServiceQuery,
   findServiceById,
   findServiceByIdDetail,
+  findServiceByDisplayOrder,
   softDeleteService,
   hardDeleteService,
   countContactEntriesByService,
@@ -67,6 +69,30 @@ interface ServiceRelations {
   packages?: PackageInput[];
   faqs?: FaqInput[];
 }
+
+const assertPujaProcessExists = async (id: string): Promise<void> => {
+  const result = await pool.query(findPujaProcessByIdSimple, [id]);
+  if (!result.rows[0]) {
+    throw new AppError("NOT_FOUND", "Puja process not found", 404, [
+      { field: "puja_process_id", message: "The selected puja process does not exist" },
+    ]);
+  }
+};
+
+const assertUniqueDisplayOrder = async (displayOrder: number, excludeId?: string): Promise<void> => {
+  const result = await pool.query<{ id: string; title: string }>(findServiceByDisplayOrder, [
+    displayOrder,
+    excludeId ?? null,
+  ]);
+  if (result.rows[0]) {
+    throw new AppError("CONFLICT", "This display order is already used by another service", 409, [
+      {
+        field: "display_order",
+        message: `Display order ${displayOrder} is already assigned to "${result.rows[0].title}"`,
+      },
+    ]);
+  }
+};
 
 const replaceServiceRelations = async (
   client: { query: typeof pool.query },
@@ -191,13 +217,15 @@ export const listServicesPublic = async (req: Request, res: Response, next: Next
     }
 
     const sortMap: Record<string, string> = {
+      display_order: "s.display_order ASC, s.created_at DESC",
+      display_order_desc: "s.display_order DESC, s.created_at DESC",
       price_asc: "s.price ASC",
       price_desc: "s.price DESC",
       rating: "s.rating_avg DESC",
       newest: "s.created_at DESC",
       title: "s.title ASC",
     };
-    const orderBy = sortMap[q.sort ?? ""] ?? "s.display_order ASC, s.created_at DESC";
+    const orderBy = sortMap[q.sort ?? "display_order"] ?? "s.display_order ASC, s.created_at DESC";
 
     const [rows, count] = await Promise.all([
       pool.query(
@@ -227,7 +255,7 @@ export const getServiceBySlug = async (req: Request, res: Response, next: NextFu
 export const getBestsellers = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await pool.query(listBestsellers);
-    const grouped = new Map<string, { category: { id: string; name: string; slug: string }; services: unknown[] }>();
+    const grouped = new Map<string, { category: { id: string; name: string; slug: string }; services: Array<{ display_order: number; created_at: string }> }>();
 
     for (const row of result.rows) {
       const key = row.category_id;
@@ -238,6 +266,12 @@ export const getBestsellers = async (_req: Request, res: Response, next: NextFun
         });
       }
       grouped.get(key)!.services.push(row);
+    }
+
+    for (const group of grouped.values()) {
+      group.services.sort(
+        (a, b) => a.display_order - b.display_order || a.created_at.localeCompare(b.created_at)
+      );
     }
 
     return success(res, Array.from(grouped.values()));
@@ -310,12 +344,14 @@ export const listServicesAdmin = async (req: Request, res: Response, next: NextF
     }
 
     const sortMap: Record<string, string> = {
+      display_order: "s.display_order ASC, s.created_at DESC",
+      display_order_desc: "s.display_order DESC, s.created_at DESC",
       price_asc: "s.price ASC",
       price_desc: "s.price DESC",
       newest: "s.created_at DESC",
       title: "s.title ASC",
     };
-    const orderBy = sortMap[q.sort ?? ""] ?? "s.created_at DESC";
+    const orderBy = sortMap[q.sort ?? "display_order"] ?? "s.display_order ASC, s.created_at DESC";
 
     const [rows, count] = await Promise.all([
       pool.query(
@@ -360,7 +396,14 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       duration_minutes, advance_booking_days, is_featured, is_bestseller,
       display_order, meta_title, meta_description, key_features, packages, faqs,
       availability_start_date, availability_end_date, booking_availability_type, available_dates,
+      puja_process_id,
     } = req.body;
+
+    if (puja_process_id) {
+      await assertPujaProcessExists(puja_process_id);
+    }
+
+    await assertUniqueDisplayOrder(display_order);
 
     const categoryFlags = await pool.query(findCategoryFlags, [category_id]);
     if (!categoryFlags.rows[0]) throw new AppError("NOT_FOUND", "Category not found", 404);
@@ -401,6 +444,7 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
       finalIsAddonAvailable, finalBenefits, finalKeyFeatures,
       finalAvailabilityStartDate, finalAvailabilityEndDate, finalBookingAvailabilityType, finalAvailableDates,
+      puja_process_id ?? null,
     ]);
     const service = result.rows[0];
 
@@ -432,14 +476,26 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     const existing = await client.query(findServiceById, [req.params.id]);
     if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
 
-    const { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs, custom_content, ...rest } = req.body;
+    const { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs, custom_content, puja_process_id, ...rest } = req.body;
     const files = req.files as MulterS3Files | undefined;
+
+    if (puja_process_id) {
+      await assertPujaProcessExists(puja_process_id);
+    }
+
+    if (rest.display_order !== undefined) {
+      await assertUniqueDisplayOrder(rest.display_order as number, req.params.id);
+    }
 
     const fields: string[] = [];
     const values: unknown[] = [];
     for (const [key, value] of Object.entries(rest)) {
       fields.push(key);
       values.push(value);
+    }
+    if (puja_process_id !== undefined) {
+      fields.push("puja_process_id");
+      values.push(puja_process_id);
     }
     if (custom_content !== undefined) {
       fields.push("custom_content");
@@ -521,7 +577,7 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
 
     await client.query("COMMIT");
 
-    const detail = await pool.query(findServiceById, [req.params.id]);
+    const detail = await pool.query(findServiceByIdDetail, [req.params.id]);
     return success(res, detail.rows[0], "Service updated", 200);
   } catch (err) {
     await client.query("ROLLBACK");

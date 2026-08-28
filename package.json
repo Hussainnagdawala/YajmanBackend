@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon",
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').cpSync('src/assets','dist/assets',{recursive:true})\"",
     "start": "node dist/server.js",
     "seed": "node scripts/seed.js",
     "seed:admin": "node scripts/seed-admin.js",
@@ -17,9 +17,11 @@
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1091.0",
+    "@aws-sdk/s3-request-presigner": "^3.1091.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
     "express": "^4.22.2",
     "express-rate-limit": "^7.5.1",
     "firebase-admin": "^14.2.0",

@@ -103,17 +103,3 @@ export const updateTestimonialSchema = z.object({
   display_order: z.coerce.number().int().optional(),
   is_active: z.coerce.boolean().optional(),
 });
-
-export const createRecommendedServiceSchema = z.object({
-  service_id: z.string().uuid(),
-  page: z.string().trim().min(1).max(50).default("home"),
-  section: z.string().trim().min(1).max(50).default("recommended"),
-  display_order: z.coerce.number().int().default(0),
-});
-export const updateRecommendedServiceSchema = z.object({
-  service_id: z.string().uuid().optional(),
-  page: z.string().trim().min(1).max(50).optional(),
-  section: z.string().trim().min(1).max(50).optional(),
-  display_order: z.coerce.number().int().optional(),
-  is_active: z.coerce.boolean().optional(),
-});

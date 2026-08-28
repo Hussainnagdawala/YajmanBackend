@@ -161,12 +161,16 @@ export const createServiceSchema = z.preprocess(
   available_dates: jsonArrayDefaulted(dateStringSchema),
   is_featured: strictBoolean.default(false),
   is_bestseller: strictBoolean.default(false),
-  display_order: z.coerce.number().int().default(0),
+  display_order: z.coerce
+    .number({ invalid_type_error: "Display order must be a valid number" })
+    .int("Display order must be a whole number")
+    .nonnegative("Display order cannot be negative"),
   meta_title: z.string().trim().max(200, "Meta title must be at most 200 characters").optional(),
   meta_description: z.string().trim().optional(),
   key_features: jsonArrayDefaulted(z.string().trim().min(1, "Key feature cannot be empty")),
   packages: jsonArrayDefaulted(packageSchema),
   faqs: jsonArrayDefaulted(faqSchema),
+  puja_process_id: blankToUndefined(z.string().uuid("Puja process must be a valid ID").optional()),
   })
     .superRefine((data, ctx) => {
       servicePricingRefine(data, ctx);
@@ -213,12 +217,20 @@ export const updateServiceSchema = z.preprocess(
   is_featured: strictBoolean.optional(),
   is_bestseller: strictBoolean.optional(),
   is_active: strictBoolean.optional(),
-  display_order: z.coerce.number().int().optional(),
+  display_order: z.coerce
+    .number({ invalid_type_error: "Display order must be a valid number" })
+    .int("Display order must be a whole number")
+    .nonnegative("Display order cannot be negative")
+    .optional(),
   meta_title: z.string().trim().max(200, "Meta title must be at most 200 characters").optional(),
   meta_description: z.string().trim().optional(),
   key_features: jsonArrayOptional(z.string().trim().min(1, "Key feature cannot be empty")),
   packages: jsonArrayOptional(packageSchema),
   faqs: jsonArrayOptional(faqSchema),
+  puja_process_id: z.preprocess(
+    (val) => (val === "" ? null : val),
+    z.string().uuid("Puja process must be a valid ID").nullable().optional()
+  ),
   })
     .superRefine((data, ctx) => {
       servicePricingRefine(data, ctx);
@@ -233,7 +245,7 @@ export const listServicesQuerySchema = paginationSchema.extend({
   min_price: z.coerce.number().nonnegative().optional(),
   max_price: z.coerce.number().nonnegative().optional(),
   rating: z.coerce.number().min(0).max(5).optional(),
-  sort: z.enum(["price_asc", "price_desc", "rating", "newest", "title"]).optional(),
+  sort: z.enum(["display_order", "display_order_desc", "price_asc", "price_desc", "rating", "newest", "title"]).optional(),
   is_featured: strictBoolean.optional(),
   is_bestseller: strictBoolean.optional(),
   requires_pandit: strictBoolean.optional(),
@@ -246,7 +258,7 @@ export const listServicesAdminQuerySchema = paginationSchema.extend({
   category_id: z.string().uuid().optional(),
   status: z.enum(["draft", "published", "archived"]).optional(),
   is_active: strictBoolean.optional(),
-  sort: z.enum(["price_asc", "price_desc", "newest", "title"]).optional(),
+  sort: z.enum(["display_order", "display_order_desc", "price_asc", "price_desc", "newest", "title"]).optional(),
   requires_pandit: strictBoolean.optional(),
   requires_payment: strictBoolean.optional(),
 });

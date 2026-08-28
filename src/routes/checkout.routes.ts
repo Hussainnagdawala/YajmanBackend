@@ -59,11 +59,15 @@ router.post("/webhook", checkoutController.razorpayWebhook);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [service_id, booking_date, booking_time, customer_name, customer_phone, members]
+ *             required: [service_id, booking_date, customer_name, customer_phone, members]
  *             properties:
  *               service_id: { type: string, format: uuid }
  *               booking_date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', example: '2026-08-15' }
- *               booking_time: { type: string, pattern: '^\d{2}:\d{2}$', example: '10:30' }
+ *               booking_time:
+ *                 type: string
+ *                 pattern: '^\d{2}:\d{2}$'
+ *                 example: '10:30'
+ *                 description: Required only when the service category has requires_booking_time true (PanditJi At Home). Omit for all other categories.
  *               customer_name: { type: string, maxLength: 100 }
  *               customer_phone: { type: string, pattern: '^[6-9]\d{9}$', example: '9876543210' }
  *               customer_whatsapp: { type: string, pattern: '^[6-9]\d{9}$' }

@@ -42,6 +42,7 @@ const categoryUploads = uploadFields([
  *               meta_description: { type: string }
  *               requires_pandit: { type: boolean, default: true }
  *               requires_payment: { type: boolean, default: true }
+ *               requires_booking_time: { type: boolean, default: false, description: 'Only true for PanditJi At Home — enables time slot picker at checkout' }
  *               image: { type: string, format: binary }
  *               icon: { type: string, format: binary }
  *     responses:
@@ -142,6 +143,7 @@ router.get("/:id", categoryController.getCategory);
  *               meta_description: { type: string }
  *               requires_pandit: { type: boolean }
  *               requires_payment: { type: boolean }
+ *               requires_booking_time: { type: boolean }
  *               is_active: { type: boolean }
  *               image: { type: string, format: binary }
  *               icon: { type: string, format: binary }

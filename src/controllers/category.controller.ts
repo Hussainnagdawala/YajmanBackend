@@ -16,8 +16,22 @@ import {
   setCategoryTypes,
   clearCategoryTypes,
 } from "../queries/category.queries";
+import { PANDITJI_AT_HOME_SLUG } from "../utils/booking-time";
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
+
+const normalizeBookingTimeFlag = (slug: string, requiresBookingTime?: boolean): boolean => {
+  if (slug === PANDITJI_AT_HOME_SLUG) return true;
+  if (requiresBookingTime) {
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "Time slot selection is only available for the PanditJi At Home category",
+      400,
+      [{ field: "requires_booking_time", message: "Only PanditJi At Home can require a booking time slot" }]
+    );
+  }
+  return false;
+};
 
 export const listCategories = async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -49,12 +63,13 @@ export const getCategory = async (req: Request, res: Response, next: NextFunctio
 
 export const createCategory = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, description, type_ids, display_order, meta_title, meta_description, requires_pandit, requires_payment } = req.body;
+    const { name, description, type_ids, display_order, meta_title, meta_description, requires_pandit, requires_payment, requires_booking_time } = req.body;
     const files = req.files as MulterS3Files | undefined;
     const imageUrl = files?.image?.[0]?.location ?? null;
     const iconUrl = files?.icon?.[0]?.location ?? null;
 
     const slug = await generateUniqueSlug(name, "categories");
+    const finalRequiresBookingTime = normalizeBookingTimeFlag(slug, requires_booking_time);
 
     const result = await pool.query(createCategoryQuery, [
       name,
@@ -67,6 +82,7 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
       meta_description ?? null,
       requires_pandit,
       requires_payment,
+      finalRequiresBookingTime,
     ]);
     const category = result.rows[0];
 
@@ -104,6 +120,24 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
     if (files?.icon?.[0]) {
       fields.push("icon_url");
       values.push(files.icon[0].location);
+    }
+
+    if (rest.requires_booking_time !== undefined || fields.includes("slug")) {
+      const existing = await pool.query(findCategoryById, [req.params.id]);
+      if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Category not found", 404);
+      const slugIdx = fields.indexOf("slug");
+      const effectiveSlug = slugIdx >= 0 ? (values[slugIdx] as string) : existing.rows[0].slug;
+      const requestedFlag =
+        rest.requires_booking_time !== undefined
+          ? Boolean(rest.requires_booking_time)
+          : Boolean(existing.rows[0].requires_booking_time);
+      const normalizedFlag = normalizeBookingTimeFlag(effectiveSlug, requestedFlag);
+      const flagIdx = fields.indexOf("requires_booking_time");
+      if (flagIdx >= 0) values[flagIdx] = normalizedFlag;
+      else {
+        fields.push("requires_booking_time");
+        values.push(normalizedFlag);
+      }
     }
 
     let category;

@@ -50,15 +50,22 @@ export const findBookingDetail = `
       ORDER BY pa.assigned_at DESC LIMIT 1
     ) AS pandit,
     (
-      SELECT jsonb_build_object('id', pm.id, 'status', pm.status, 'method', pm.method, 'paid_at', pm.paid_at)
+      SELECT jsonb_build_object(
+        'id', pm.id, 'status', pm.status, 'method', pm.method,
+        'paid_at', pm.paid_at, 'amount', pm.amount,
+        'razorpay_payment_id', pm.razorpay_payment_id
+      )
       FROM payments pm WHERE pm.order_id = o.id ORDER BY pm.created_at DESC LIMIT 1
     ) AS payment,
     (
       SELECT jsonb_build_object('id', r.id, 'rating', r.rating, 'title', r.title, 'comment', r.comment)
       FROM reviews r WHERE r.booking_id = o.id LIMIT 1
-    ) AS review
+    ) AS review,
+    c.slug AS category_slug,
+    c.requires_booking_time
   FROM orders o
   JOIN services s ON s.id = o.service_id
+  JOIN categories c ON c.id = s.category_id
   WHERE o.id = $1
 `;
 

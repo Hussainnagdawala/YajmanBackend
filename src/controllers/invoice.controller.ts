@@ -10,7 +10,13 @@ import {
   listInvoicesAdmin as listInvoicesAdminQuery,
   countInvoicesAdmin,
 } from "../queries/invoice.queries";
-import { generateInvoiceNumber, generateInvoicePdf, uploadInvoicePdf } from "../services/invoice.service";
+import {
+  generateInvoiceNumber,
+  generateInvoicePdf,
+  uploadInvoicePdf,
+  resolveInvoicePdfUrl,
+} from "../services/invoice.service";
+import { categoryRequiresBookingTime } from "../utils/booking-time";
 
 export const getBookingInvoice = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -23,7 +29,8 @@ export const getBookingInvoice = async (req: Request, res: Response, next: NextF
 
     const existing = await pool.query(findInvoiceByOrderId, [order.id]);
     if (existing.rows[0]) {
-      return success(res, { invoice_number: existing.rows[0].invoice_number, pdf_url: existing.rows[0].pdf_url });
+      const pdf_url = await resolveInvoicePdfUrl(existing.rows[0].pdf_url);
+      return success(res, { invoice_number: existing.rows[0].invoice_number, pdf_url });
     }
 
     const invoiceNumber = await generateInvoiceNumber();
@@ -33,14 +40,28 @@ export const getBookingInvoice = async (req: Request, res: Response, next: NextF
         order_number: order.order_number,
         customer_name: order.customer_name,
         customer_phone: order.customer_phone,
-        customer_email: order.customer_email,
+        customer_whatsapp: order.customer_whatsapp ?? null,
+        customer_email: order.customer_email ?? null,
         booking_date: order.booking_date,
         booking_time: order.booking_time,
-        address: order.address,
-        city: order.city,
-        pincode: order.pincode,
+        address: order.address ?? null,
+        city: order.city ?? null,
+        state: order.state ?? null,
+        pincode: order.pincode ?? null,
       },
       service_title: order.service_title,
+      requires_booking_time: categoryRequiresBookingTime({
+        requires_booking_time: order.requires_booking_time,
+        slug: order.category_slug,
+      }),
+      members: (order.members ?? []) as string[],
+      gotra: order.gotra ?? null,
+      gotra_unknown: Boolean(order.gotra_unknown),
+      coupon_code: order.coupon_code ?? null,
+      special_instructions: order.special_instructions ?? null,
+      pandit: order.pandit?.display_name
+        ? { display_name: order.pandit.display_name, phone: order.pandit.phone ?? undefined }
+        : null,
       addons: (order.addons ?? []).map((a: { name: string; price: number }) => ({
         name: a.name,
         price: Number(a.price),
@@ -55,14 +76,17 @@ export const getBookingInvoice = async (req: Request, res: Response, next: NextF
         status: order.payment?.status ?? "pending",
         method: order.payment?.method ?? null,
         paid_at: order.payment?.paid_at ?? null,
+        amount: order.payment?.amount != null ? Number(order.payment.amount) : null,
+        razorpay_payment_id: order.payment?.razorpay_payment_id ?? null,
       },
     };
 
     const pdfBuffer = await generateInvoicePdf(invoiceData);
     const pdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
-    const invoice = await pool.query(createInvoice, [order.id, invoiceNumber, pdfUrl, JSON.stringify(invoiceData)]);
+    await pool.query(createInvoice, [order.id, invoiceNumber, pdfUrl, JSON.stringify(invoiceData)]);
+    const signedPdfUrl = await resolveInvoicePdfUrl(pdfUrl);
 
-    return success(res, { invoice_number: invoice.rows[0].invoice_number, pdf_url: pdfUrl }, "Invoice generated", 201);
+    return success(res, { invoice_number: invoiceNumber, pdf_url: signedPdfUrl }, "Invoice generated", 201);
   } catch (err) {
     next(err);
   }
@@ -89,7 +113,14 @@ export const listInvoicesAdmin = async (req: Request, res: Response, next: NextF
       pool.query<{ count: number }>(countInvoicesAdmin(whereClauses), values),
     ]);
 
-    return success(res, rows.rows, "Invoices fetched", 200, meta(count.rows[0].count));
+    const invoices = await Promise.all(
+      rows.rows.map(async (row) => ({
+        ...row,
+        pdf_url: await resolveInvoicePdfUrl(row.pdf_url),
+      }))
+    );
+
+    return success(res, invoices, "Invoices fetched", 200, meta(count.rows[0].count));
   } catch (err) {
     next(err);
   }

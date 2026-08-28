@@ -23,12 +23,6 @@ import {
   updateTestimonial as updateTestimonialQuery,
   softDeleteTestimonial,
   hardDeleteTestimonial,
-  listRecommendedServices,
-  listAllRecommendedServices,
-  createRecommendedService as createRecommendedServiceQuery,
-  updateRecommendedService as updateRecommendedServiceQuery,
-  softDeleteRecommendedService,
-  hardDeleteRecommendedService,
   listRecentBlogs,
   getAppSettingsByKeys,
 } from "../queries/home.queries";
@@ -473,105 +467,6 @@ export const deleteTestimonialPermanently = async (
     if (result.rows[0].author_avatar_url)
       await deleteFromS3(result.rows[0].author_avatar_url);
     return success(res, result.rows[0], "Testimonial permanently deleted");
-  } catch (err) {
-    next(err);
-  }
-};
-
-// ─── Admin: recommended services ──────────────────────────────
-
-export const listRecommendedServicesAdmin = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { page, section } = req.query as { page?: string; section?: string };
-    if (page && section) {
-      const result = await pool.query(listRecommendedServices, [page, section]);
-      return success(res, result.rows);
-    }
-    const result = await pool.query(listAllRecommendedServices);
-    return success(res, result.rows);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const createRecommendedService = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { service_id, page, section, display_order } = req.body;
-    const result = await pool.query(createRecommendedServiceQuery, [
-      service_id,
-      page,
-      section,
-      display_order,
-    ]);
-    return success(res, result.rows[0], "Recommended service created", 201);
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const updateRecommendedService = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const fields = Object.keys(req.body);
-    if (fields.length === 0)
-      throw new AppError("VALIDATION_ERROR", "No fields to update", 400);
-    const values = fields.map((f) => req.body[f]);
-    const result = await pool.query(updateRecommendedServiceQuery(fields), [
-      req.params.id,
-      ...values,
-    ]);
-    if (!result.rows[0])
-      throw new AppError("NOT_FOUND", "Recommended service not found", 404);
-    return success(res, result.rows[0], "Recommended service updated");
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const deleteRecommendedService = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const result = await pool.query(softDeleteRecommendedService, [
-      req.params.id,
-    ]);
-    if (!result.rows[0])
-      throw new AppError("NOT_FOUND", "Recommended service not found", 404);
-    return success(res, result.rows[0], "Recommended service deleted");
-  } catch (err) {
-    next(err);
-  }
-};
-
-export const deleteRecommendedServicePermanently = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const result = await pool.query(hardDeleteRecommendedService, [
-      req.params.id,
-    ]);
-    if (!result.rows[0])
-      throw new AppError("NOT_FOUND", "Recommended service not found", 404);
-    return success(
-      res,
-      result.rows[0],
-      "Recommended service permanently deleted",
-    );
   } catch (err) {
     next(err);
   }

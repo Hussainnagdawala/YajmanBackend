@@ -7,6 +7,7 @@ import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
 import { trackView } from "../services/analytics.service";
+import { fetchPlacementsForPage } from "./service-placement.controller";
 import {
   listActiveBlogCategories,
   listAllBlogCategories,
@@ -31,7 +32,6 @@ import {
   listBlogsAdmin as listBlogsAdminQuery,
   countBlogsAdmin,
   findBlogBySlug,
-  listSidebarServices,
   clearRecommendedBlogs,
   setRecommendedBlogs,
   insertBlogImage,
@@ -195,14 +195,19 @@ export const listBlogsPublic = async (req: Request, res: Response, next: NextFun
 
 export const getBlogBySlug = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [blogResult, sidebarResult] = await Promise.all([
+    const [blogResult, sidebarPlacements, inlineAdPlacements] = await Promise.all([
       pool.query(findBlogBySlug, [req.params.slug]),
-      pool.query(listSidebarServices),
+      fetchPlacementsForPage("blogs", "sidebar", 5),
+      fetchPlacementsForPage("blogs", "inline_ad"),
     ]);
     if (!blogResult.rows[0]) throw new AppError("NOT_FOUND", "Blog not found", 404);
 
     trackView(req, "blog", blogResult.rows[0].id);
-    return success(res, { ...blogResult.rows[0], sidebar_services: sidebarResult.rows });
+    return success(res, {
+      ...blogResult.rows[0],
+      sidebar_services: sidebarPlacements,
+      inline_ad_services: inlineAdPlacements,
+    });
   } catch (err) {
     next(err);
   }

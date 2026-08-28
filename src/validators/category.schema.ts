@@ -24,6 +24,7 @@ export const createCategorySchema = z.object({
   meta_description: z.string().trim().optional(),
   requires_pandit: formBoolean.default(true),
   requires_payment: formBoolean.default(true),
+  requires_booking_time: formBoolean.default(false),
 });
 
 // NOTE: independent objects, not createXSchema.partial() — .partial() only makes
@@ -42,6 +43,7 @@ export const updateCategorySchema = z.object({
   meta_description: z.string().trim().optional(),
   requires_pandit: formBoolean.optional(),
   requires_payment: formBoolean.optional(),
+  requires_booking_time: formBoolean.optional(),
   is_active: z.coerce.boolean().optional(),
 });
 

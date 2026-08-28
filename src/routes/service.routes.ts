@@ -299,7 +299,8 @@ router.get("/:slug", optionalAuthenticate, serviceController.getServiceBySlug);
  *         schema: { type: number, minimum: 0, maximum: 5 }
  *       - in: query
  *         name: sort
- *         schema: { type: string, enum: [price_asc, price_desc, rating, newest, title] }
+ *         schema: { type: string, enum: [display_order, display_order_desc, price_asc, price_desc, rating, newest, title] }
+ *         description: Default is display_order (ascending). Website renders services in this order.
  *       - in: query
  *         name: is_featured
  *         schema: { type: boolean }

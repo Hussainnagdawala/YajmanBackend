@@ -30,6 +30,7 @@ import {
 } from "../queries/payment.queries";
 import { insertCouponUsage, incrementCouponUsageCount } from "../queries/coupon.queries";
 import { logOrderActivity } from "../services/booking.service";
+import { categoryRequiresBookingTime, resolveBookingTime } from "../utils/booking-time";
 
 interface PgError {
   code?: string;
@@ -121,7 +122,21 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       ]);
     }
 
-    const bookingDateTime = computeBookingDateTime(booking_date, booking_time, service.advance_booking_days);
+    const requiresBookingTime = categoryRequiresBookingTime({
+      requires_booking_time: service.requires_booking_time,
+      slug: service.category_slug,
+    });
+    const resolvedBookingTime = resolveBookingTime(
+      { requires_booking_time: service.requires_booking_time, slug: service.category_slug },
+      booking_time
+    );
+    if (requiresBookingTime && !resolvedBookingTime) {
+      throw new AppError("VALIDATION_ERROR", "Please select a booking time slot", 400, [
+        { field: "booking_time", message: "A time slot is required for this service category" },
+      ]);
+    }
+
+    const bookingDateTime = computeBookingDateTime(booking_date, resolvedBookingTime, service.advance_booking_days);
     await assertNoDuplicateBooking(userId, service_id, booking_date);
 
     const requestedAddonIds: string[] = addon_ids ?? [];
@@ -172,7 +187,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       [
         userId, service_id, customer_name, customer_phone, customer_whatsapp ?? null,
         customer_calling_number ?? null, customer_email ?? null, gotra ?? null, gotra_unknown,
-        booking_date, booking_time, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
+        booking_date, resolvedBookingTime, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
         basePrice, discountAmount, convenienceFee, totalAmount, couponId, couponCode,
         birth_date ?? null, birth_time ?? null, birth_place ?? null, special_instructions ?? null,
         addonTotal,

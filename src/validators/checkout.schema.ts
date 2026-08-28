@@ -4,7 +4,7 @@ import { dateStringSchema, timeStringSchema, phoneSchema } from "./common.schema
 export const createOrderSchema = z.object({
   service_id: z.string().uuid("Service must be a valid ID"),
   booking_date: dateStringSchema,
-  booking_time: timeStringSchema,
+  booking_time: timeStringSchema.optional(),
   customer_name: z.string().trim().min(1, "Customer name is required").max(100, "Customer name must be at most 100 characters"),
   customer_phone: phoneSchema,
   customer_whatsapp: phoneSchema.optional(),

@@ -52,13 +52,13 @@ export const findCategoryById = `
 export const createCategory = `
   INSERT INTO categories (
     name, slug, description, image_url, icon_url, display_order, meta_title, meta_description,
-    requires_pandit, requires_payment
+    requires_pandit, requires_payment, requires_booking_time
   )
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
   RETURNING *
 `;
 
-export const findCategoryFlags = `SELECT requires_pandit, requires_payment FROM categories WHERE id = $1`;
+export const findCategoryFlags = `SELECT requires_pandit, requires_payment, requires_booking_time, slug FROM categories WHERE id = $1`;
 
 export const updateCategory = (fields: string[]) => `
   UPDATE categories SET ${fields.map((f, i) => `${f} = $${i + 2}`).join(", ")}, updated_at = NOW()

@@ -1,5 +1,7 @@
 // ─── Services: core CRUD ────────────────────────────────────
 
+import { pujaProcessJsonForService } from "./puja-process.queries";
+
 export const createService = `
   INSERT INTO services (
     title, slug, category_id, type_id, price, original_price,
@@ -8,7 +10,8 @@ export const createService = `
     feature_image_url, video_url, duration_minutes, advance_booking_days,
     is_featured, is_bestseller, display_order, meta_title, meta_description, created_by,
     is_addon_available, benefits, key_features,
-    availability_start_date, availability_end_date, booking_availability_type, available_dates
+    availability_start_date, availability_end_date, booking_availability_type, available_dates,
+    puja_process_id
   ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10,
@@ -16,7 +19,8 @@ export const createService = `
     $14, $15, $16, $17,
     $18, $19, $20, $21, $22, $23,
     $24, $25, $26,
-    $27, $28, $29, $30
+    $27, $28, $29, $30,
+    $31
   )
   RETURNING *
 `;
@@ -29,6 +33,12 @@ export const updateService = (fields: string[]) => `
 
 export const findServiceById = `SELECT * FROM services WHERE id = $1`;
 
+export const findServiceByDisplayOrder = `
+  SELECT id, title FROM services
+  WHERE display_order = $1 AND ($2::uuid IS NULL OR id != $2)
+  LIMIT 1
+`;
+
 export const findServiceWithCategory = `
   SELECT s.id, s.title, c.id AS category_id, c.name AS category_name
   FROM services s
@@ -37,7 +47,8 @@ export const findServiceWithCategory = `
 `;
 
 export const findActiveServiceById = `
-  SELECT s.*, c.requires_pandit, c.requires_payment
+  SELECT s.*,
+    c.requires_pandit, c.requires_payment, c.requires_booking_time, c.slug AS category_slug
   FROM services s
   JOIN categories c ON c.id = s.category_id
   WHERE s.id = $1 AND s.is_active = true AND s.status = 'published'
@@ -56,7 +67,7 @@ export const softDeleteService = `
 // ─── Services: public listing ───────────────────────────────
 
 export const listServices = (whereClauses: string[], orderBy: string, limitIdx: number, offsetIdx: number) => `
-  SELECT s.*, c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment
+  SELECT s.*, c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment, c.requires_booking_time
   FROM services s
   JOIN categories c ON c.id = s.category_id
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
@@ -76,7 +87,7 @@ export const listBestsellers = `
   FROM services s
   JOIN categories c ON c.id = s.category_id
   WHERE s.is_active = true AND s.status = 'published' AND s.is_bestseller = true
-  ORDER BY c.display_order, s.display_order
+  ORDER BY c.display_order, s.display_order ASC, s.created_at DESC
 `;
 
 /** Trending / featured services for app carousels (flat list). */
@@ -99,7 +110,8 @@ export const countTrendingServices = `
 
 export const findServiceBySlug = `
   SELECT s.*,
-    c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment,
+    c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment, c.requires_booking_time,
+    ${pujaProcessJsonForService(true)},
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', si.id, 'url', si.image_url, 'alt_text', si.alt_text, 'display_order', si.display_order) ORDER BY si.display_order)
        FROM service_images si WHERE si.service_id = s.id), '[]'
@@ -130,12 +142,14 @@ export const findServiceBySlug = `
     ) AS addons
   FROM services s
   JOIN categories c ON c.id = s.category_id
+  LEFT JOIN puja_processes pp ON pp.id = s.puja_process_id
   WHERE s.slug = $1 AND s.is_active = true AND s.status = 'published'
 `;
 
 export const findServiceByIdDetail = `
   SELECT s.*,
-    c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment,
+    c.name AS category_name, c.slug AS category_slug, c.requires_pandit, c.requires_payment, c.requires_booking_time,
+    ${pujaProcessJsonForService(false)},
     COALESCE(
       (SELECT json_agg(jsonb_build_object('id', si.id, 'url', si.image_url, 'alt_text', si.alt_text, 'display_order', si.display_order) ORDER BY si.display_order)
        FROM service_images si WHERE si.service_id = s.id), '[]'
@@ -166,6 +180,7 @@ export const findServiceByIdDetail = `
     ) AS addons
   FROM services s
   JOIN categories c ON c.id = s.category_id
+  LEFT JOIN puja_processes pp ON pp.id = s.puja_process_id
   WHERE s.id = $1
 `;
 

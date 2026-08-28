@@ -8,7 +8,7 @@ import templeRoutes from "./temple.routes";
 import bannerRoutes from "./banner.routes";
 import popularRoutes from "./popular.routes";
 import testimonialRoutes from "./testimonial.routes";
-import recommendedRoutes from "./recommended.routes";
+import servicePlacementRoutes from "./service-placement.routes";
 import blogRoutes from "./blog.routes";
 import blogCategoryRoutes from "./blog-category.routes";
 import blogAuthorRoutes from "./blog-author.routes";
@@ -25,6 +25,8 @@ import notificationRoutes from "./notification.routes";
 import settingsRoutes from "./settings.routes";
 import addonRoutes from "./addon.routes";
 import galleryRoutes from "./gallery.routes";
+import exportRoutes from "./export.routes";
+import pujaProcessRoutes from "./puja-process.routes";
 
 const router = Router();
 
@@ -37,7 +39,7 @@ router.use("/temples", templeRoutes);
 router.use("/banners", bannerRoutes);
 router.use("/popular-searches", popularRoutes);
 router.use("/testimonials", testimonialRoutes);
-router.use("/recommended-services", recommendedRoutes);
+router.use("/service-placements", servicePlacementRoutes);
 router.use("/blogs", blogRoutes);
 router.use("/blog-categories", blogCategoryRoutes);
 router.use("/blog-authors", blogAuthorRoutes);
@@ -54,5 +56,7 @@ router.use("/notifications", notificationRoutes);
 router.use("/app-settings", settingsRoutes);
 router.use("/addons", addonRoutes);
 router.use("/gallery", galleryRoutes);
+router.use("/export", exportRoutes);
+router.use("/puja-processes", pujaProcessRoutes);
 
 export default router;

@@ -46,6 +46,8 @@ import notificationRoutes from "./notification.routes";
 import appRoutes from "./app.routes";
 import addonRoutes from "./addon.routes";
 import bannerRoutes from "./banner.routes";
+import pujaProcessRoutes from "./puja-process.routes";
+import servicePlacementRoutes from "./service-placement.routes";
 
 const router = Router();
 
@@ -71,5 +73,7 @@ router.use("/contact", contactRoutes);
 router.use("/notifications", authenticate, notificationRoutes);
 router.use("/app", appRoutes);
 router.use("/addons", addonRoutes);
+router.use("/puja-processes", pujaProcessRoutes);
+router.use("/service-placements", servicePlacementRoutes);
 
 export default router;

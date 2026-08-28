@@ -131,14 +131,6 @@ export const findBlogByIdAdmin = `
   WHERE b.id = $1
 `;
 
-export const listSidebarServices = `
-  SELECT id, title, slug, price, feature_image_url, rating_avg
-  FROM services
-  WHERE is_active = true AND status = 'published' AND (is_featured = true OR is_bestseller = true)
-  ORDER BY display_order
-  LIMIT 5
-`;
-
 // ─── Junctions: recommended blogs / gallery images ───────────
 
 export const clearRecommendedBlogs = `DELETE FROM blog_recommended WHERE blog_id = $1`;

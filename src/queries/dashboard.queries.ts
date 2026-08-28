@@ -119,7 +119,7 @@ export const panditPerformance = (limitIdx: number) => `
 // ─── Category-wise breakdown ────────────────────────────────────
 
 export const categoryBreakdown = `
-  SELECT c.id, c.name, c.slug, c.requires_pandit, c.requires_payment,
+  SELECT c.id, c.name, c.slug, c.requires_pandit, c.requires_payment, c.requires_booking_time,
     COUNT(DISTINCT s.id)::int AS services_count,
     COUNT(o.id) FILTER (WHERE ${NOT_REAL_BOOKING})::int AS bookings_count,
     COALESCE(SUM(o.total_amount) FILTER (WHERE ${NOT_REAL_BOOKING}), 0)::float AS revenue

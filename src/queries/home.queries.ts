@@ -64,37 +64,6 @@ export const updateTestimonial = (fields: string[]) => `
 export const softDeleteTestimonial = `UPDATE testimonials SET is_active = false WHERE id = $1 RETURNING *`;
 export const hardDeleteTestimonial = `DELETE FROM testimonials WHERE id = $1 RETURNING *`;
 
-// ─── Recommended services ────────────────────────────────────
-
-export const listRecommendedServices = `
-  SELECT rs.*, s.title, s.slug, s.price, s.feature_image_url, s.rating_avg
-  FROM recommended_services rs
-  JOIN services s ON s.id = rs.service_id
-  WHERE rs.page = $1 AND rs.section = $2 AND rs.is_active = true
-    AND s.is_active = true AND s.status = 'published'
-  ORDER BY rs.display_order
-`;
-export const listAllRecommendedServices = `
-  SELECT rs.*, s.title, s.slug
-  FROM recommended_services rs
-  JOIN services s ON s.id = rs.service_id
-  ORDER BY rs.page, rs.section, rs.display_order
-`;
-export const createRecommendedService = `
-  INSERT INTO recommended_services (service_id, page, section, display_order)
-  VALUES ($1, $2, $3, $4)
-  RETURNING *
-`;
-export const updateRecommendedService = (fields: string[]) => `
-  UPDATE recommended_services SET ${fields.map((f, i) => `${f} = $${i + 2}`).join(", ")}
-  WHERE id = $1
-  RETURNING *
-`;
-export const softDeleteRecommendedService = `
-  UPDATE recommended_services SET is_active = false WHERE id = $1 RETURNING *
-`;
-export const hardDeleteRecommendedService = `DELETE FROM recommended_services WHERE id = $1 RETURNING *`;
-
 // ─── Home aggregator reads ───────────────────────────────────
 
 export const listRecentBlogs = `

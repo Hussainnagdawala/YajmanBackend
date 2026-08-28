@@ -33,6 +33,7 @@ const router = Router();
  *                           display_order: { type: integer }
  *                           requires_pandit: { type: boolean }
  *                           requires_payment: { type: boolean }
+ *                           requires_booking_time: { type: boolean, description: 'When true, checkout shows a time slot picker (PanditJi At Home only)' }
  */
 router.get("/", categoryController.listCategories);
 

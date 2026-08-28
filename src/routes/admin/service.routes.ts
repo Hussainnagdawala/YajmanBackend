@@ -49,7 +49,8 @@ const serviceUploads = uploadFields([
  *         schema: { type: boolean }
  *       - name: sort
  *         in: query
- *         schema: { type: string, enum: [price_asc, price_desc, newest, title] }
+ *         schema: { type: string, enum: [display_order, display_order_desc, price_asc, price_desc, newest, title] }
+ *         description: Default is display_order (ascending). Use display_order_desc for reverse.
  *       - name: requires_pandit
  *         in: query
  *         schema: { type: boolean }
@@ -120,7 +121,7 @@ router.get("/:id", serviceController.getServiceAdmin);
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required: [title, category_id, feature_image]
+ *             required: [title, category_id, feature_image, display_order]
  *             properties:
  *               title: { type: string, maxLength: 200 }
  *               category_id: { type: string, format: uuid }
@@ -166,7 +167,7 @@ router.get("/:id", serviceController.getServiceAdmin);
  *                 default: []
  *               is_featured: { type: boolean, default: false }
  *               is_bestseller: { type: boolean, default: false }
- *               display_order: { type: integer, default: 0 }
+ *               display_order: { type: integer, minimum: 0, description: 'Required. Must be unique across all services.' }
  *               meta_title: { type: string, maxLength: 200 }
  *               meta_description: { type: string }
  *               key_features:

@@ -54,6 +54,33 @@ export const errorHandler = (err: unknown, req: Request, res: Response, _next: N
   if (isPgError(err)) {
     switch (err.code) {
       case PG_UNIQUE_VIOLATION:
+        if (err.constraint === "idx_services_display_order_unique") {
+          return error(
+            res,
+            "This display order is already used by another service. Please choose a different number.",
+            409,
+            "CONFLICT",
+            [{ field: "display_order", message: "Each service must have a unique display order number" }]
+          );
+        }
+        if (err.constraint === "idx_recommended_services_page_section_order") {
+          return error(
+            res,
+            "This display order is already used in this page section.",
+            409,
+            "CONFLICT",
+            [{ field: "display_order", message: "Each placement in a section must have a unique display order" }]
+          );
+        }
+        if (err.constraint === "recommended_services_service_id_page_section_key") {
+          return error(
+            res,
+            "This service is already placed in this page section.",
+            409,
+            "CONFLICT",
+            [{ field: "service_id", message: "This service is already assigned to this page and section" }]
+          );
+        }
         return error(res, "A record with this value already exists. Please use a different value.", 409, "CONFLICT");
       case PG_FOREIGN_KEY_VIOLATION:
         return error(res, "The referenced item does not exist or is still in use.", 409, "CONFLICT");

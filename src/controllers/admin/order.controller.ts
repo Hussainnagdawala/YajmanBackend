@@ -6,6 +6,7 @@ import { paginate } from "../../utils/pagination";
 import { logger } from "../../config/logger";
 import { razorpay } from "../../config/razorpay";
 import { assertValidStatusTransition, cancelOrderWithRefund, logOrderActivity } from "../../services/booking.service";
+import { resolveInvoicePdfUrl } from "../../services/invoice.service";
 import { findLatestPaymentForOrder } from "../../queries/booking.queries";
 import { markPaymentRefunded } from "../../queries/payment.queries";
 import {
@@ -64,7 +65,13 @@ export const getOrderDetailAdmin = async (req: Request, res: Response, next: Nex
   try {
     const result = await pool.query(findOrderDetailAdmin, [req.params.id]);
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Order not found", 404);
-    return success(res, result.rows[0]);
+
+    const order = result.rows[0];
+    if (order.invoice?.pdf_url) {
+      order.invoice.pdf_url = await resolveInvoicePdfUrl(order.invoice.pdf_url);
+    }
+
+    return success(res, order);
   } catch (err) {
     next(err);
   }
