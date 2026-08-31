@@ -85,9 +85,9 @@ export const insertInboxSingle = `
 
 export const updateInboxDeliveryStatus = `
   UPDATE notifications
-  SET delivery_status = $2,
+  SET delivery_status = $2::notification_delivery_status,
       failure_reason = $3,
-      delivered_at = CASE WHEN $2 = 'delivered' OR $2 = 'sent' THEN COALESCE(delivered_at, NOW()) ELSE delivered_at END
+      delivered_at = CASE WHEN $2::text IN ('delivered', 'sent') THEN COALESCE(delivered_at, NOW()) ELSE delivered_at END
   WHERE id = ANY($1::uuid[])
 `;
 

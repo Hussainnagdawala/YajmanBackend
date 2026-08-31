@@ -99,6 +99,11 @@ const MIGRATIONS = [
     checkSql:
       "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='recommended_services' AND column_name='starts_at')",
   },
+  {
+    file: "019_categories_display_order_unique.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_categories_display_order_unique')",
+  },
 ];
 
 const buildClientConfig = () => {

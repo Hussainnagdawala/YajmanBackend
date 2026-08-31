@@ -19,7 +19,8 @@ export const createCategorySchema = z.object({
     .transform((val) => (typeof val === "string" ? (val ? [val] : []) : val))
     .optional()
     .default([]),
-  display_order: z.coerce.number().int().default(0),
+  // Omit to auto-assign the next free slot. If sent, must be unique (see controller).
+  display_order: z.coerce.number().int().nonnegative().optional(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
   requires_pandit: formBoolean.default(true),
@@ -38,7 +39,7 @@ export const updateCategorySchema = z.object({
     .union([z.array(z.string().uuid()), z.string()])
     .transform((val) => (typeof val === "string" ? (val ? [val] : []) : val))
     .optional(),
-  display_order: z.coerce.number().int().optional(),
+  display_order: z.coerce.number().int().nonnegative().optional(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
   requires_pandit: formBoolean.optional(),

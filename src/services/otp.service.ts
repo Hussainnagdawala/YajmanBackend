@@ -8,7 +8,63 @@ const MAX_ATTEMPTS = 5;
 const MAX_ATTEMPTS_PER_HOUR = 10;
 const PURPOSE_LOGIN = "login";
 
+const sendViaWhatsApp = async (phone: string, countryCode: string, otp: string): Promise<void> => {
+  const to = `${countryCode.replace("+", "")}${phone}`;
+  const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
+
+  const components: unknown[] = [
+    { type: "body", parameters: [{ type: "text", text: otp }] },
+  ];
+  if (env.WHATSAPP_OTP_HAS_BUTTON) {
+    components.push({
+      type: "button",
+      sub_type: "url",
+      index: "0",
+      parameters: [{ type: "text", text: otp }],
+    });
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "template",
+      template: {
+        name: env.WHATSAPP_OTP_TEMPLATE,
+        language: { code: env.WHATSAPP_OTP_LANG },
+        components,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    logger.error("WhatsApp OTP send failed", { status: res.status, body });
+    throw new AppError("OTP_SEND_FAILED", "Failed to send OTP", 502);
+  }
+};
+
 const sendViaProvider = async (phone: string, countryCode: string, otp: string): Promise<void> => {
+  if (env.OTP_PROVIDER === "whatsapp") {
+    // TEMP: WhatsApp send disabled — OTP is fixed to 123456 for now.
+    // Re-enable by uncommenting the sendViaWhatsApp call below and restoring
+    // the real OTP in sendOtp().
+    logger.debug(`[OTP:whatsapp:disabled] ${countryCode}${phone} -> ${otp}`);
+    return;
+    // if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
+    //   logger.debug(`[OTP:whatsapp:dev] ${countryCode}${phone} -> ${otp}`);
+    //   return;
+    // }
+    // await sendViaWhatsApp(phone, countryCode, otp);
+    // return;
+  }
+
   if (env.NODE_ENV !== "production" || !env.OTP_API_KEY) {
     logger.debug(`[OTP] ${countryCode}${phone} -> ${otp}`);
     return;
@@ -33,7 +89,7 @@ const sendViaProvider = async (phone: string, countryCode: string, otp: string):
 };
 
 export const sendOtp = async (phone: string, countryCode: string): Promise<{ expires_in: number }> => {
-  // const otp = generateOtp(6);
+  // TEMP: fixed OTP while WhatsApp send is disabled. Restore: generateOtp(6)
   const otp = "123456";
   const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MINUTES * 60 * 1000);
 

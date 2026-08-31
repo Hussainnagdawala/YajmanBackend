@@ -15,10 +15,33 @@ import {
   countServicesByCategory,
   setCategoryTypes,
   clearCategoryTypes,
+  findCategoryByDisplayOrder,
+  getMaxCategoryDisplayOrder,
 } from "../queries/category.queries";
 import { PANDITJI_AT_HOME_SLUG } from "../utils/booking-time";
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
+
+// display_order must be globally unique across categories (idx_categories_display_order_unique).
+const assertUniqueDisplayOrder = async (displayOrder: number, excludeId?: string): Promise<void> => {
+  const result = await pool.query<{ id: string; name: string }>(findCategoryByDisplayOrder, [
+    displayOrder,
+    excludeId ?? null,
+  ]);
+  if (result.rows[0]) {
+    throw new AppError("CONFLICT", "This display order is already used by another category", 409, [
+      {
+        field: "display_order",
+        message: `Display order ${displayOrder} is already assigned to "${result.rows[0].name}"`,
+      },
+    ]);
+  }
+};
+
+const nextDisplayOrder = async (): Promise<number> => {
+  const result = await pool.query<{ max: number }>(getMaxCategoryDisplayOrder);
+  return Number(result.rows[0].max) + 1;
+};
 
 const normalizeBookingTimeFlag = (slug: string, requiresBookingTime?: boolean): boolean => {
   if (slug === PANDITJI_AT_HOME_SLUG) return true;
@@ -71,13 +94,21 @@ export const createCategory = async (req: Request, res: Response, next: NextFunc
     const slug = await generateUniqueSlug(name, "categories");
     const finalRequiresBookingTime = normalizeBookingTimeFlag(slug, requires_booking_time);
 
+    let finalDisplayOrder: number;
+    if (display_order === undefined || display_order === null) {
+      finalDisplayOrder = await nextDisplayOrder();
+    } else {
+      await assertUniqueDisplayOrder(display_order);
+      finalDisplayOrder = display_order;
+    }
+
     const result = await pool.query(createCategoryQuery, [
       name,
       slug,
       description ?? null,
       imageUrl,
       iconUrl,
-      display_order ?? 0,
+      finalDisplayOrder,
       meta_title ?? null,
       meta_description ?? null,
       requires_pandit,
@@ -100,6 +131,10 @@ export const updateCategory = async (req: Request, res: Response, next: NextFunc
   try {
     const { type_ids, ...rest } = req.body;
     const files = req.files as MulterS3Files | undefined;
+
+    if (rest.display_order !== undefined && rest.display_order !== null) {
+      await assertUniqueDisplayOrder(rest.display_order as number, req.params.id);
+    }
 
     const fields: string[] = [];
     const values: unknown[] = [];

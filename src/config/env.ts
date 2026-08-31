@@ -30,6 +30,17 @@ const envSchema = z.object({
   OTP_TEMPLATE_ID: z.string().default(""),
   OTP_EXPIRY_MINUTES: z.string().default("10").transform(Number),
 
+  // WhatsApp Cloud API (Meta Graph) — used when OTP_PROVIDER=whatsapp
+  WHATSAPP_ACCESS_TOKEN: z.string().default(""),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().default(""),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().default(""),
+  WHATSAPP_GRAPH_VERSION: z.string().default("v21.0"),
+  WHATSAPP_OTP_TEMPLATE: z.string().default("otp"),
+  WHATSAPP_OTP_LANG: z.string().default("en"),
+  // authentication templates carry a copy-code button by default; set to "false"
+  // only if your template has no button component
+  WHATSAPP_OTP_HAS_BUTTON: z.string().default("true").transform((v) => v !== "false"),
+
   RAZORPAY_KEY_ID: z.string().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1, "RAZORPAY_WEBHOOK_SECRET is required"),

@@ -60,6 +60,14 @@ export const createCategory = `
 
 export const findCategoryFlags = `SELECT requires_pandit, requires_payment, requires_booking_time, slug FROM categories WHERE id = $1`;
 
+export const findCategoryByDisplayOrder = `
+  SELECT id, name FROM categories
+  WHERE display_order = $1 AND ($2::uuid IS NULL OR id != $2)
+  LIMIT 1
+`;
+
+export const getMaxCategoryDisplayOrder = `SELECT COALESCE(MAX(display_order), -1) AS max FROM categories`;
+
 export const updateCategory = (fields: string[]) => `
   UPDATE categories SET ${fields.map((f, i) => `${f} = $${i + 2}`).join(", ")}, updated_at = NOW()
   WHERE id = $1

@@ -63,6 +63,15 @@ export const errorHandler = (err: unknown, req: Request, res: Response, _next: N
             [{ field: "display_order", message: "Each service must have a unique display order number" }]
           );
         }
+        if (err.constraint === "idx_categories_display_order_unique") {
+          return error(
+            res,
+            "This display order is already used by another category. Please choose a different number.",
+            409,
+            "CONFLICT",
+            [{ field: "display_order", message: "Each category must have a unique display order number" }]
+          );
+        }
         if (err.constraint === "idx_recommended_services_page_section_order") {
           return error(
             res,
