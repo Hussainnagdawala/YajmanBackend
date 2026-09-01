@@ -21,3 +21,17 @@ export const deactivateDeviceToken = `
 export const listActiveTokensForUsers = `
   SELECT * FROM device_tokens WHERE user_id = ANY($1::uuid[]) AND is_active = true
 `;
+
+export const listActiveAppTokensForUsers = `
+  SELECT * FROM device_tokens
+  WHERE user_id = ANY($1::uuid[])
+    AND is_active = true
+    AND platform IN ('android', 'ios')
+`;
+
+export const listActiveWebTokensForUsers = `
+  SELECT * FROM device_tokens
+  WHERE user_id = ANY($1::uuid[])
+    AND is_active = true
+    AND platform = 'web'
+`;

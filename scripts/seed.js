@@ -69,6 +69,51 @@ const migrations = [
     checkSql:
       "SELECT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid WHERE t.typname = 'booking_status' AND e.enumlabel = 'payment_failed');",
   },
+  {
+    file: "011_contact_inquiry_category.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='contact_form_entries' AND column_name='category_id');",
+  },
+  {
+    file: "012_aayojan_gallery_images.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='aayojan_gallery_images');",
+  },
+  {
+    file: "013_analytics_events.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='analytics_events');",
+  },
+  {
+    file: "014_gallery_images.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='gallery_images');",
+  },
+  {
+    file: "015_category_requires_booking_time.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='categories' AND column_name='requires_booking_time');",
+  },
+  {
+    file: "016_puja_processes.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='puja_processes');",
+  },
+  {
+    file: "017_services_display_order_unique.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_services_display_order_unique');",
+  },
+  {
+    file: "018_service_placements_enhance.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='recommended_services' AND column_name='starts_at');",
+  },
+  {
+    file: "019_categories_display_order_unique.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_categories_display_order_unique');",
+  },
 ];
 
 function runPsql(filePath, description) {

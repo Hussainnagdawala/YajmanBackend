@@ -112,10 +112,13 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [token, platform]
+ *             required: [device_token]
  *             properties:
- *               token: { type: string, minLength: 1 }
- *               platform: { type: string, enum: [web, android, ios] }
+ *               device_token: { type: string, minLength: 1, description: Push notification token }
+ *               token: { type: string, minLength: 1, description: Legacy alias for device_token }
+ *               platform: { type: string, enum: [app, web, android, ios], description: Delivery channel. Prefer `app` or `web`. }
+ *               device_type: { type: string, enum: [android, ios, browser], description: Device detail for routing/metadata }
+ *               browser: { type: string, description: Browser name when platform is web (e.g. chrome) }
  *               device_info:
  *                 type: object
  *                 additionalProperties: true
@@ -170,9 +173,10 @@ router.get("/device-tokens", profileController.listDeviceTokens);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [token]
+ *             required: [device_token]
  *             properties:
- *               token: { type: string, minLength: 1 }
+ *               device_token: { type: string, minLength: 1 }
+ *               token: { type: string, minLength: 1, description: Legacy alias for device_token }
  *     responses:
  *       200:
  *         description: Device token removed

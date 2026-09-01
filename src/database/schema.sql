@@ -13,7 +13,10 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TYPE user_role AS ENUM ('customer', 'pandit', 'admin');
 CREATE TYPE user_status AS ENUM ('active', 'inactive', 'suspended');
-CREATE TYPE booking_status AS ENUM ('pending', 'confirmed', 'pandit_assigned', 'in_progress', 'completed', 'cancelled', 'refunded');
+CREATE TYPE booking_status AS ENUM (
+  'pending', 'confirmed', 'pandit_assigned', 'in_progress', 'completed', 'cancelled', 'refunded',
+  'payment_failed', 'refund_failed', 'disputed'
+);
 CREATE TYPE payment_status AS ENUM ('pending', 'created', 'authorized', 'captured', 'failed', 'refunded');
 CREATE TYPE pandit_assignment_status AS ENUM ('pending', 'accepted', 'rejected', 'expired', 'completed');
 CREATE TYPE coupon_discount_type AS ENUM ('percentage', 'fixed');
@@ -28,6 +31,7 @@ CREATE TYPE notification_campaign_status AS ENUM (
 CREATE TYPE notification_delivery_status AS ENUM (
   'pending', 'sent', 'delivered', 'failed', 'skipped'
 );
+CREATE TYPE device_platform AS ENUM ('web', 'android', 'ios');
 
 -- ============================================================
 -- 1. USERS & AUTH
@@ -87,6 +91,20 @@ CREATE TABLE refresh_tokens (
 
 CREATE INDEX idx_refresh_user ON refresh_tokens(user_id);
 
+-- Push notification device tokens (FCM/APNs/Web Push)
+CREATE TABLE device_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    platform device_platform NOT NULL,
+    device_info JSONB,
+    is_active BOOLEAN DEFAULT TRUE,
+    last_used_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_device_tokens_user ON device_tokens(user_id, is_active);
+
 -- ============================================================
 -- 2. PANDIT PROFILES
 -- ============================================================
@@ -128,11 +146,16 @@ CREATE TABLE categories (
     icon_url TEXT,
     display_order INT DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
+    requires_pandit BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_payment BOOLEAN NOT NULL DEFAULT TRUE,
+    requires_booking_time BOOLEAN NOT NULL DEFAULT FALSE,
     meta_title VARCHAR(200),
     meta_description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX idx_categories_display_order_unique ON categories (display_order);
 
 -- Types: Health, Marriage, Business, Navgrah, Festival, etc.
 CREATE TABLE types (
@@ -169,7 +192,35 @@ CREATE TABLE tags (
 );
 
 -- ============================================================
--- 4. SERVICES (main entity)
+-- 4. PUJA PROCESSES (reusable step templates)
+-- ============================================================
+
+CREATE TABLE puja_processes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(150) NOT NULL,
+    slug VARCHAR(170) NOT NULL UNIQUE,
+    description TEXT,
+    display_order INT NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE puja_process_steps (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    puja_process_id UUID NOT NULL REFERENCES puja_processes(id) ON DELETE CASCADE,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    display_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_puja_process_steps_process ON puja_process_steps(puja_process_id);
+CREATE INDEX idx_puja_process_steps_order ON puja_process_steps(puja_process_id, display_order);
+
+-- ============================================================
+-- 5. SERVICES (main entity)
 -- ============================================================
 
 CREATE TABLE services (
@@ -180,7 +231,7 @@ CREATE TABLE services (
     type_id UUID REFERENCES types(id),
 
     -- Pricing
-    price DECIMAL(10,2) NOT NULL,
+    price DECIMAL(10,2),
     original_price DECIMAL(10,2), -- strikethrough price (NULL = no discount)
     discount_percent INT, -- auto-calculated or manual
 
@@ -189,11 +240,10 @@ CREATE TABLE services (
     about_puja TEXT, -- "About this Puja" section
     description TEXT, -- detailed description
     custom_content TEXT, -- rich HTML from text editor (optional)
+    benefits TEXT[] NOT NULL DEFAULT '{}',
+    key_features TEXT[] NOT NULL DEFAULT '{}',
 
-    -- Location
-    location VARCHAR(200),
-    city VARCHAR(100),
-    state VARCHAR(100),
+    -- Location (pincode/coordinates only; city/state removed)
     pincode VARCHAR(10),
     latitude DECIMAL(10,7),
     longitude DECIMAL(10,7),
@@ -204,12 +254,21 @@ CREATE TABLE services (
 
     -- Duration & scheduling
     duration_minutes INT,
-    advance_booking_hours INT DEFAULT 24, -- must book X hours before
+    advance_booking_days INT DEFAULT 0,
+    availability_start_date DATE,
+    availability_end_date DATE,
+    booking_availability_type VARCHAR(20) NOT NULL DEFAULT 'all_day'
+        CHECK (booking_availability_type IN ('all_day', 'specific_day')),
+    available_dates TEXT[] NOT NULL DEFAULT '{}',
 
     -- Flags
     is_active BOOLEAN DEFAULT TRUE,
     is_featured BOOLEAN DEFAULT FALSE,
     is_bestseller BOOLEAN DEFAULT FALSE,
+    is_addon_available BOOLEAN NOT NULL DEFAULT FALSE,
+
+    -- Puja process template (optional)
+    puja_process_id UUID REFERENCES puja_processes(id) ON DELETE SET NULL,
 
     -- SEO
     meta_title VARCHAR(200),
@@ -237,6 +296,8 @@ CREATE INDEX idx_services_active ON services(is_active, status);
 CREATE INDEX idx_services_featured ON services(is_featured) WHERE is_featured = TRUE;
 CREATE INDEX idx_services_price ON services(price);
 CREATE INDEX idx_services_rating ON services(rating_avg DESC);
+CREATE INDEX idx_services_puja_process ON services(puja_process_id);
+CREATE UNIQUE INDEX idx_services_display_order_unique ON services (display_order);
 
 -- Service-tag junction (many-to-many)
 CREATE TABLE service_tags (
@@ -258,16 +319,6 @@ CREATE TABLE service_images (
 );
 
 CREATE INDEX idx_service_images ON service_images(service_id);
-
--- Service key features (bullet points)
-CREATE TABLE service_key_features (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-    title VARCHAR(150) NOT NULL,
-    description TEXT,
-    icon_url TEXT,
-    display_order INT DEFAULT 0
-);
 
 -- Temple details (optional, linked to service)
 CREATE TABLE temples (
@@ -322,7 +373,34 @@ CREATE TABLE service_types (
 );
 
 -- ============================================================
--- 5. REVIEWS
+-- 5b. ADDONS (checkout extras)
+-- ============================================================
+
+CREATE TABLE addons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(100) NOT NULL,
+    slug VARCHAR(120) NOT NULL UNIQUE,
+    image_url TEXT,
+    price DECIMAL(10,2) NOT NULL,
+    is_free BOOLEAN NOT NULL DEFAULT FALSE,
+    display_order INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE service_addons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+    addon_id UUID NOT NULL REFERENCES addons(id) ON DELETE CASCADE,
+    UNIQUE(service_id, addon_id)
+);
+
+CREATE INDEX idx_service_addons_service ON service_addons(service_id);
+CREATE INDEX idx_service_addons_addon ON service_addons(addon_id);
+
+-- ============================================================
+-- 6. REVIEWS
 -- ============================================================
 
 CREATE TABLE reviews (
@@ -414,11 +492,23 @@ CREATE TABLE recommended_services (
     service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     page VARCHAR(50) DEFAULT 'home', -- home, articles, blogs, aayojan
     section VARCHAR(50) DEFAULT 'recommended', -- recommended, bestseller, premium
+    label VARCHAR(100),
+    cta_text VARCHAR(50),
     display_order INT DEFAULT 0,
+    starts_at TIMESTAMP WITH TIME ZONE,
+    ends_at TIMESTAMP WITH TIME ZONE,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(service_id, page, section)
 );
+
+CREATE UNIQUE INDEX idx_recommended_services_page_section_order
+  ON recommended_services (page, section, display_order)
+  WHERE is_active = true;
+
+CREATE INDEX idx_recommended_services_lookup
+  ON recommended_services (page, section, is_active, display_order);
 
 -- ============================================================
 -- 7. AAYOJAN (Event Planning)
@@ -492,6 +582,15 @@ CREATE TABLE aayojan_banners (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Aayojan page-level image gallery (not tied to a specific event)
+CREATE TABLE aayojan_gallery_images (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    image_url TEXT NOT NULL,
+    display_order INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ============================================================
 -- 8. CONTACT FORMS
 -- ============================================================
@@ -515,6 +614,8 @@ CREATE TABLE contact_form_entries (
     -- Service-specific
     service_id UUID REFERENCES services(id),
     service_name VARCHAR(200),
+    category_id UUID REFERENCES categories(id),
+    category_name VARCHAR(100),
 
     -- Admin handling
     is_read BOOLEAN DEFAULT FALSE,
@@ -528,6 +629,37 @@ CREATE TABLE contact_form_entries (
 
 CREATE INDEX idx_contact_form_type ON contact_form_entries(form_type);
 CREATE INDEX idx_contact_status ON contact_form_entries(status);
+
+-- ============================================================
+-- 8b. ANALYTICS & GALLERY
+-- ============================================================
+
+CREATE TABLE analytics_events (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    entity_type VARCHAR(20) NOT NULL, -- 'service' | 'aayojan_event' | 'blog'
+    entity_id UUID NOT NULL,
+    event_type VARCHAR(20) NOT NULL DEFAULT 'view',
+    user_id UUID REFERENCES users(id),
+    visitor_hash VARCHAR(64) NOT NULL,
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_analytics_entity ON analytics_events(entity_type, entity_id, created_at);
+CREATE INDEX idx_analytics_user ON analytics_events(user_id, created_at) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_analytics_visitor ON analytics_events(visitor_hash, created_at);
+
+CREATE TABLE gallery_images (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    image_url TEXT NOT NULL,
+    title VARCHAR(200),
+    display_order INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_gallery_images_active ON gallery_images(is_active, display_order);
 
 -- ============================================================
 -- 9. BLOGS
@@ -684,6 +816,7 @@ CREATE TABLE orders (
     -- Pricing
     base_price DECIMAL(10,2) NOT NULL,
     discount_amount DECIMAL(10,2) DEFAULT 0,
+    addon_total DECIMAL(10,2) NOT NULL DEFAULT 0,
     convenience_fee DECIMAL(10,2) DEFAULT 0,
     total_amount DECIMAL(10,2) NOT NULL,
     coupon_id UUID REFERENCES coupons(id),
@@ -726,6 +859,18 @@ CREATE TABLE order_members (
 );
 
 CREATE INDEX idx_order_members ON order_members(order_id);
+
+-- Per-order addon snapshots (name/price at time of booking)
+CREATE TABLE order_addons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    addon_id UUID REFERENCES addons(id) ON DELETE SET NULL,
+    name VARCHAR(100) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_order_addons_order ON order_addons(order_id);
 
 -- ============================================================
 -- 12. PAYMENTS (Razorpay)
@@ -1054,6 +1199,10 @@ CREATE TRIGGER trg_coupons_updated BEFORE UPDATE ON coupons FOR EACH ROW EXECUTE
 CREATE TRIGGER trg_banners_updated BEFORE UPDATE ON banners FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_notification_campaigns_updated BEFORE UPDATE ON notification_campaigns FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER trg_app_settings_updated BEFORE UPDATE ON app_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_puja_processes_updated BEFORE UPDATE ON puja_processes FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_puja_process_steps_updated BEFORE UPDATE ON puja_process_steps FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_addons_updated BEFORE UPDATE ON addons FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER trg_recommended_services_updated BEFORE UPDATE ON recommended_services FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- Auto-calculate discount_percent on services
 CREATE OR REPLACE FUNCTION calc_discount_percent()
@@ -1114,5 +1263,5 @@ CREATE TRIGGER trg_invoice_number BEFORE INSERT ON invoices
     EXECUTE FUNCTION generate_invoice_number();
 
 -- ============================================================
--- DONE. 32 tables, all indexes, triggers, enums.
+-- DONE. 40+ tables, all indexes, triggers, enums.
 -- ============================================================

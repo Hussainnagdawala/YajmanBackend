@@ -1,11 +1,28 @@
 import rateLimit from "express-rate-limit";
 import { env } from "../config/env";
 
+const adminApiPrefix = `/api/${env.API_VERSION}/admin`;
+
 export const globalRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    const path = req.originalUrl.split("?")[0];
+    // Admin portal is authenticated and issues many list/upload calls from one IP.
+    if (path.startsWith(adminApiPrefix)) return true;
+    if (path === "/health" || path.startsWith("/api-docs")) return true;
+    return false;
+  },
+  message: {
+    success: false,
+    error: {
+      message: "Too many requests, try again later",
+      status: 429,
+      code: "RATE_LIMITED",
+    },
+  },
 });
 
 export const otpRateLimiter = rateLimit({

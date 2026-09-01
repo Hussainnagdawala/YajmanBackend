@@ -64,9 +64,25 @@ No auth. Creates the user on first login.
   "phone": "9876543210",
   "otp": "123456",
   "country_code": "+91",
-  "device_source": "web"
+  "device_source": "app",
+  "device_token": "fcm-device-token",
+  "platform": "app",
+  "device_type": "android"
 }
 ```
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `phone` | string | Yes | 10-digit Indian mobile number |
+| `otp` | string | Yes | 6-digit OTP from `/auth/send-otp` |
+| `country_code` | string | No | Default `+91` |
+| `device_source` | string | No | `web`, `app`, or `portal` (default `web`) |
+| `device_token` | string | No | FCM/Web Push token. Stored after successful login; omitted/empty values are ignored |
+| `platform` | string | No | Delivery channel: `app` or `web`. Legacy `android`/`ios`/`web` still accepted |
+| `device_type` | string | No | `android`, `ios`, or `browser`. Send `ios` for iPhone when `platform` is `app` |
+| `browser` | string | No | Browser name when `platform` is `web` (e.g. `chrome`, `safari`) |
+
+Login without `device_token` continues to work unchanged. See [NOTIFICATION_DEVICE_TOKEN_PLATFORM_FLOW.md](./NOTIFICATION_DEVICE_TOKEN_PLATFORM_FLOW.md) for the full multi-device notification architecture.
 
 →
 
@@ -103,8 +119,13 @@ No auth. Refresh tokens rotate — the old one is invalidated the moment this is
 Auth required.
 
 ```json
-{ "refresh_token": "ad1a556c..." }
+{
+  "refresh_token": "ad1a556c...",
+  "device_token": "fcm-or-web-push-token"
+}
 ```
+
+`device_token` is optional. When provided, marks that device's push token as inactive for the logged-in user.
 
 → `{ "success": true, "message": "Logged out", "data": null }`
 
@@ -147,13 +168,22 @@ Auth required. Register/refresh a push token — call whenever the client obtain
 
 ```json
 {
-  "token": "fcm-or-apns-or-webpush-token",
-  "platform": "web",
-  "device_info": { "browser": "Chrome" }
+  "device_token": "fcm-or-web-push-token",
+  "platform": "app",
+  "device_type": "android",
+  "device_info": { "model": "Pixel 8" }
 }
 ```
 
-`platform`: `"web" | "android" | "ios"`. `device_info` optional, freeform object.
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `device_token` | string | Yes | Push token (`token` accepted as legacy alias) |
+| `platform` | string | No | `app` or `web` (legacy `android`/`ios`/`web` accepted) |
+| `device_type` | string | No | `android`, `ios`, or `browser` |
+| `browser` | string | No | Browser name for web clients |
+| `device_info` | object | No | Freeform metadata |
+
+→ `201` with the stored device record.
 
 ### `GET /profile/device-tokens`
 
@@ -164,8 +194,10 @@ Auth required. Lists the caller's active devices.
 Auth required. Call on logout / push-permission revoked.
 
 ```json
-{ "token": "fcm-or-apns-or-webpush-token" }
+{ "device_token": "fcm-or-web-push-token" }
 ```
+
+`token` is accepted as a legacy alias for `device_token`.
 
 ---
 

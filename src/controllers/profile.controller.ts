@@ -3,10 +3,9 @@ import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { findUserById, updateProfile as updateProfileQuery } from "../queries/user.queries";
+import { storeDeviceTokenForUser, deactivateDeviceTokenForUser } from "../services/device-token.service";
 import {
-  upsertDeviceToken,
   listDeviceTokensForUser,
-  deactivateDeviceToken,
 } from "../queries/device.queries";
 
 export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
@@ -45,9 +44,17 @@ export const uploadAvatar = async (req: Request, res: Response, next: NextFuncti
 
 export const registerDeviceToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { token, platform, device_info } = req.body;
-    const result = await pool.query(upsertDeviceToken, [req.user!.id, token, platform, device_info ?? null]);
-    return success(res, result.rows[0], "Device token registered", 201);
+    const { device_token, platform, device_type, browser, device_info } = req.body;
+    const stored = await storeDeviceTokenForUser(req.user!.id, {
+      deviceToken: device_token,
+      platform,
+      deviceType: device_type,
+      browser,
+      deviceInfo: device_info ?? null,
+      required: true,
+    });
+    if (!stored) throw new AppError("VALIDATION_ERROR", "device_token is required", 400);
+    return success(res, stored, "Device token registered", 201);
   } catch (err) {
     next(err);
   }
@@ -64,8 +71,9 @@ export const listDeviceTokens = async (req: Request, res: Response, next: NextFu
 
 export const removeDeviceToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await pool.query(deactivateDeviceToken, [req.body.token, req.user!.id]);
-    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Device token not found", 404);
+    const { device_token } = req.body;
+    const deactivated = await deactivateDeviceTokenForUser(req.user!.id, device_token);
+    if (!deactivated) throw new AppError("NOT_FOUND", "Device token not found", 404);
     return success(res, null, "Device token removed");
   } catch (err) {
     next(err);

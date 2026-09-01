@@ -387,6 +387,12 @@ export const sendNotificationCampaign = async (
       campaign.target_user_ids as string[] | null
     );
 
+    logger.info("NOTIFICATION recipients resolved", {
+      campaignId: id,
+      targetType: campaign.target_type,
+      recipientCount: userIds.length,
+    });
+
     let inboxRows: { id: string; user_id: string }[] = [];
     if (userIds.length > 0) {
       const inboxResult = await pool.query(insertInboxBulk, [
@@ -409,6 +415,8 @@ export const sendNotificationCampaign = async (
       imageUrl: campaign.image_url as string | null,
       data: {
         type: String(campaign.type ?? "promo"),
+        title: String(campaign.title ?? ""),
+        body: String(campaign.message ?? ""),
         deep_link: String(campaign.deep_link ?? ""),
         action_type: String(campaign.action_type ?? ""),
         action_value: String(campaign.action_value ?? ""),

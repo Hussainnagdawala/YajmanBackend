@@ -8,13 +8,13 @@ INSERT INTO users (phone, country_code, name, email, role, status) VALUES
 ('8109181057', '+91', 'Yajman Admin', 'admin@yajmanapp.in', 'admin', 'active');
 
 -- ─── CATEGORIES ─────────────────────────────────────────────
-INSERT INTO categories (name, slug, description, display_order) VALUES
-('Puja At Home', 'puja-at-home', 'Book experienced pandits for pujas at your home', 1),
-('E-Puja', 'e-puja', 'Live-streamed pujas performed at sacred temples', 2),
-('Premium Puja', 'premium-puja', 'Premium puja packages with complete arrangements', 3),
-('Astrology', 'astrology', 'Consult expert astrologers for guidance', 4),
-('Aarti & Katha', 'aarti-katha', 'Sacred aartis, kathas, bhajans and muhurat guidance', 5),
-('PanditJi At Home', 'panditji-at-home', 'Book a pandit for rituals and ceremonies at home', 6);
+INSERT INTO categories (name, slug, description, display_order, requires_booking_time) VALUES
+('Puja At Home', 'puja-at-home', 'Book experienced pandits for pujas at your home', 1, false),
+('E-Puja', 'e-puja', 'Live-streamed pujas performed at sacred temples', 2, false),
+('Premium Puja', 'premium-puja', 'Premium puja packages with complete arrangements', 3, false),
+('Astrology', 'astrology', 'Consult expert astrologers for guidance', 4, false),
+('Aarti & Katha', 'aarti-katha', 'Sacred aartis, kathas, bhajans and muhurat guidance', 5, false),
+('PanditJi At Home', 'panditji-at-home', 'Book a pandit for rituals and ceremonies at home', 6, true);
 
 -- ─── TYPES ──────────────────────────────────────────────────
 INSERT INTO types (name, slug, description, display_order) VALUES

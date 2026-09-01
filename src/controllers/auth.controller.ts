@@ -4,6 +4,7 @@ import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
 import { sendOtp as sendOtpService, verifyOtp as verifyOtpService } from "../services/otp.service";
 import { signAccessToken, issueRefreshToken, rotateRefreshToken, revokeRefreshToken, expiryToMs } from "../services/auth.service";
+import { storeDeviceTokenForUser, deactivateDeviceTokenForUser } from "../services/device-token.service";
 import { findUserByPhone, createUser, updateLastLogin, findUserById } from "../queries/user.queries";
 import { env } from "../config/env";
 import { AuthUser } from "../types/models";
@@ -20,7 +21,7 @@ export const sendOtp = async (req: Request, res: Response, next: NextFunction) =
 
 export const verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { phone, country_code = "+91", otp, device_source } = req.body;
+    const { phone, country_code = "+91", otp, device_source, device_token, platform, device_type, browser } = req.body;
     await verifyOtpService(phone, otp);
 
     const existing = await pool.query(findUserByPhone, [phone]);
@@ -33,6 +34,14 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
     } else {
       await pool.query(updateLastLogin, [user.id]);
     }
+
+    await storeDeviceTokenForUser(user.id, {
+      deviceToken: device_token,
+      platform,
+      deviceType: device_type,
+      browser,
+      deviceSource: device_source,
+    });
 
     const accessToken = signAccessToken(user);
     const refreshToken = await issueRefreshToken(user.id, { device_source });
@@ -66,8 +75,11 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
 
 export const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { refresh_token } = req.body;
+    const { refresh_token, device_token } = req.body;
     if (refresh_token) await revokeRefreshToken(refresh_token);
+    if (req.user && device_token) {
+      await deactivateDeviceTokenForUser(req.user.id, device_token);
+    }
     return success(res, null, "Logged out");
   } catch (err) {
     next(err);

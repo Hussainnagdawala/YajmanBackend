@@ -3,7 +3,7 @@ import * as authController from "../controllers/auth.controller";
 import { validate } from "../middleware/validate";
 import { authenticate } from "../middleware/auth";
 import { otpRateLimiter } from "../middleware/rateLimiter";
-import { sendOtpSchema, verifyOtpSchema, refreshTokenSchema } from "../validators/auth.schema";
+import { sendOtpSchema, verifyOtpSchema, refreshTokenSchema, logoutSchema } from "../validators/auth.schema";
 
 const router = Router();
 
@@ -67,6 +67,20 @@ router.post("/send-otp", otpRateLimiter, validate(sendOtpSchema), authController
  *               country_code: { type: string, example: '+91' }
  *               otp: { type: string, minLength: 6, maxLength: 6, example: '123456' }
  *               device_source: { type: string, enum: [web, app, portal], default: web }
+ *               device_token:
+ *                 type: string
+ *                 description: Optional FCM/Web Push token. Stored after successful authentication; login still succeeds if omitted or empty.
+ *               platform:
+ *                 type: string
+ *                 enum: [app, web, android, ios]
+ *                 description: Delivery channel — use `app` for mobile or `web` for browser. Legacy values `android`/`ios`/`web` still accepted.
+ *               device_type:
+ *                 type: string
+ *                 enum: [android, ios, browser]
+ *                 description: Device detail. Required for correct iOS routing when platform is `app`.
+ *               browser:
+ *                 type: string
+ *                 description: Browser name when platform is `web` (e.g. chrome, safari).
  *     responses:
  *       200:
  *         description: Login successful
@@ -152,6 +166,9 @@ router.post("/refresh-token", validate(refreshTokenSchema), authController.refre
  *             type: object
  *             properties:
  *               refresh_token: { type: string }
+ *               device_token:
+ *                 type: string
+ *                 description: Optional. Deactivates this device's push token for the logged-in user.
  *     responses:
  *       200:
  *         description: Logged out
@@ -161,7 +178,7 @@ router.post("/refresh-token", validate(refreshTokenSchema), authController.refre
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.post("/logout", authenticate, authController.logout);
+router.post("/logout", authenticate, validate(logoutSchema), authController.logout);
 
 /**
  * @openapi
