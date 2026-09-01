@@ -2,7 +2,13 @@ export const createCampaign = `
   INSERT INTO notification_campaigns (
     title, message, image_url, type, target_type, target_user_ids, status,
     deep_link, action_type, action_value, scheduled_at, created_by
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+  ) VALUES (
+    $1, $2, $3, $4,
+    $5::notification_target_type,
+    $6::uuid[],
+    $7::notification_campaign_status,
+    $8, $9, $10, $11, $12
+  )
   RETURNING *
 `;
 
