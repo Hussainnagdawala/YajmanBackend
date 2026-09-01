@@ -19,11 +19,17 @@ export const hardDeletePopularSearch = `DELETE FROM popular_searches WHERE id = 
 
 // ─── Banners ─────────────────────────────────────────────────
 
+// Admin sets start/end as plain dates (no time). Server runs in UTC, so a bare
+// date lands at 00:00Z — comparing that with NOW() would drop the banner at the
+// very start of its end date (5:30am IST) instead of keeping it live for the
+// whole IST calendar day. Compare IST calendar dates, inclusive on both ends.
 export const listActiveBannersByPosition = `
   SELECT * FROM banners
   WHERE position = $1 AND is_active = true
-    AND (starts_at IS NULL OR starts_at <= NOW())
-    AND (ends_at IS NULL OR ends_at >= NOW())
+    AND (starts_at IS NULL
+      OR (starts_at AT TIME ZONE 'Asia/Kolkata')::date <= (NOW() AT TIME ZONE 'Asia/Kolkata')::date)
+    AND (ends_at IS NULL
+      OR (ends_at AT TIME ZONE 'Asia/Kolkata')::date >= (NOW() AT TIME ZONE 'Asia/Kolkata')::date)
   ORDER BY display_order
 `;
 export const listAllBanners = `SELECT * FROM banners ORDER BY position, display_order`;

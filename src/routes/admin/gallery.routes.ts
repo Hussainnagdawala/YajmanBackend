@@ -132,7 +132,7 @@ router.patch("/:id", validate(updateGalleryImageSchema), galleryController.updat
  * /admin/gallery/{id}:
  *   delete:
  *     tags: [Admin: Gallery]
- *     summary: Soft-delete a gallery image (same effect as PATCH { is_active: false })
+ *     summary: "Soft-delete a gallery image (same effect as PATCH { is_active: false })"
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
