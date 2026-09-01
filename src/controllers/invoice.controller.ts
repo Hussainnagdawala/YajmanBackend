@@ -7,6 +7,7 @@ import { findBookingDetail } from "../queries/booking.queries";
 import {
   findInvoiceByOrderId,
   createInvoice,
+  updateInvoicePdfUrl,
   listInvoicesAdmin as listInvoicesAdminQuery,
   countInvoicesAdmin,
 } from "../queries/invoice.queries";
@@ -15,6 +16,7 @@ import {
   generateInvoicePdf,
   uploadInvoicePdf,
   resolveInvoicePdfUrl,
+  ensureInvoicePdfUrl,
 } from "../services/invoice.service";
 import { categoryRequiresBookingTime } from "../utils/booking-time";
 
@@ -29,8 +31,16 @@ export const getBookingInvoice = async (req: Request, res: Response, next: NextF
 
     const existing = await pool.query(findInvoiceByOrderId, [order.id]);
     if (existing.rows[0]) {
-      const pdf_url = await resolveInvoicePdfUrl(existing.rows[0].pdf_url);
-      return success(res, { invoice_number: existing.rows[0].invoice_number, pdf_url });
+      const invoice = existing.rows[0];
+      const { pdfUrl, correctedUrl } = await ensureInvoicePdfUrl(
+        invoice.pdf_url,
+        invoice.invoice_number,
+        invoice.invoice_data
+      );
+      if (correctedUrl) {
+        await pool.query(updateInvoicePdfUrl, [invoice.id, correctedUrl]);
+      }
+      return success(res, { invoice_number: invoice.invoice_number, pdf_url: pdfUrl });
     }
 
     const invoiceNumber = await generateInvoiceNumber();

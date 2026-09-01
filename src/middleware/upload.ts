@@ -29,7 +29,9 @@ const s3Storage = multerS3({
   acl: "public-read",
   key: (req, file, cb) => {
     const folder = req.uploadFolder || "general";
-    const filename = `${env.DO_PARENT_FOLDER}/${folder}/${Date.now()}-${file.originalname}`;
+    const filename = [env.DO_PARENT_FOLDER, folder, `${Date.now()}-${file.originalname}`]
+      .filter(Boolean)
+      .join("/");
     cb(null, filename);
   },
 });

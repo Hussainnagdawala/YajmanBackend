@@ -4,7 +4,7 @@ import { env } from "../config/env";
 import { pool } from "../config/database";
 import { countInvoicesThisYear } from "../queries/invoice.queries";
 import { getSettingsByKeys } from "../queries/settings.queries";
-import { getSignedDownloadUrl } from "../utils/spaces";
+import { getSignedDownloadUrl, extractSpacesKey, spacesObjectExists } from "../utils/spaces";
 import { renderInvoicePdf } from "./invoice-pdf.renderer";
 import type { InvoiceBranding, InvoiceData } from "./invoice.types";
 
@@ -55,8 +55,17 @@ export const generateInvoicePdf = async (data: Omit<InvoiceData, "branding" | "i
   return renderInvoicePdf({ ...data, branding, issued_date });
 };
 
+/** Canonical Spaces key for an invoice PDF — no leading slash, parent folder optional. */
+export const invoiceKey = (invoiceNumber: string): string =>
+  [env.DO_PARENT_FOLDER, "invoices", `${invoiceNumber}.pdf`].filter(Boolean).join("/");
+
+const spacesUrlForKey = (key: string): string => {
+  const domain = env.DO_SPACES_ENDPOINT.replace(/^https?:\/\//, "");
+  return `https://${env.DO_SPACES_BUCKET}.${domain}/${key}`;
+};
+
 export const uploadInvoicePdf = async (buffer: Buffer, invoiceNumber: string): Promise<string> => {
-  const key = `${env.DO_PARENT_FOLDER}/invoices/${invoiceNumber}.pdf`;
+  const key = invoiceKey(invoiceNumber);
   await s3Client.send(
     new PutObjectCommand({
       Bucket: env.DO_SPACES_BUCKET,
@@ -67,11 +76,44 @@ export const uploadInvoicePdf = async (buffer: Buffer, invoiceNumber: string): P
     })
   );
 
-  const domain = env.DO_SPACES_ENDPOINT.replace(/^https?:\/\//, "");
-  return `https://${env.DO_SPACES_BUCKET}.${domain}/${key}`;
+  return spacesUrlForKey(key);
 };
 
 export const resolveInvoicePdfUrl = async (storedUrl: string | null | undefined): Promise<string | null> => {
   if (!storedUrl) return null;
   return getSignedDownloadUrl(storedUrl);
+};
+
+/**
+ * Returns a working signed download URL for an existing invoice. If the stored
+ * object is missing (e.g. rows created while DO_PARENT_FOLDER was empty, which
+ * wrote a leading-slash key), re-renders the PDF from the stored invoice_data
+ * and re-uploads it to the canonical key.
+ *
+ * `correctedUrl` is set when the stored pdf_url was stale and the caller should
+ * persist the new value.
+ */
+export const ensureInvoicePdfUrl = async (
+  storedUrl: string,
+  invoiceNumber: string,
+  invoiceData: Omit<InvoiceData, "branding" | "issued_date">
+): Promise<{ pdfUrl: string; correctedUrl?: string }> => {
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)[:/]/.test(storedUrl)) {
+    return { pdfUrl: storedUrl };
+  }
+
+  let storedKey: string | null = null;
+  try {
+    storedKey = extractSpacesKey(storedUrl);
+  } catch {
+    storedKey = null;
+  }
+
+  if (storedKey && (await spacesObjectExists(storedKey))) {
+    return { pdfUrl: await getSignedDownloadUrl(storedUrl) };
+  }
+
+  const buffer = await generateInvoicePdf(invoiceData);
+  const freshUrl = await uploadInvoicePdf(buffer, invoiceNumber);
+  return { pdfUrl: (await getSignedDownloadUrl(freshUrl)) ?? freshUrl, correctedUrl: freshUrl };
 };

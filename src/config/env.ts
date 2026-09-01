@@ -49,7 +49,13 @@ const envSchema = z.object({
   DO_SPACES_SECRET: z.string().min(1, "DO_SPACES_SECRET is required"),
   DO_SPACES_ENDPOINT: z.string().min(1, "DO_SPACES_ENDPOINT is required"),
   DO_SPACES_BUCKET: z.string().min(1, "DO_SPACES_BUCKET is required"),
-  DO_PARENT_FOLDER: z.string().default("YJ-stagging"),
+  // Trim stray whitespace and slashes — an empty or "/"-padded value used to
+  // produce leading-slash S3 keys (e.g. "/invoices/x.pdf") that then 404 on
+  // download because the read path strips leading slashes.
+  DO_PARENT_FOLDER: z
+    .string()
+    .default("YJ-stagging")
+    .transform((v) => v.trim().replace(/^\/+|\/+$/g, "")),
 
 
   FRONTEND_URL: z.string().default("http://localhost:3000"),

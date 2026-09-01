@@ -10,6 +10,8 @@ export const createInvoice = `
   RETURNING *
 `;
 
+export const updateInvoicePdfUrl = `UPDATE invoices SET pdf_url = $2 WHERE id = $1`;
+
 export const listInvoicesAdmin = (whereClauses: string[], limitIdx: number, offsetIdx: number) => `
   SELECT i.*, o.order_number, o.customer_name, o.total_amount
   FROM invoices i
