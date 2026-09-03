@@ -42,9 +42,6 @@ const normalizePlatform = (
       deviceType: resolvedType,
     };
   }
-  if (platform === "web") {
-    return { fcmPlatform: "web", channel: "web", deviceType: deviceType ?? "browser" };
-  }
 
   if (deviceSource === "app") {
     const resolvedType: DeviceType = deviceType === "ios" ? "ios" : "android";

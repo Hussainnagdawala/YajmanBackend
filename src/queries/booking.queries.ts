@@ -98,3 +98,25 @@ export const freePanditAssignment = `
     updated_at = NOW()
   WHERE order_id = $1 AND status IN ('pending', 'accepted')
 `;
+
+// Upcoming active bookings that are due one of their reminder windows. The cron
+// decides per row which window applies and marks reminder_*_sent_at so each
+// fires once. `booking_datetime > NOW()` keeps just-passed bookings out.
+export const findOrdersNeedingReminder = `
+  SELECT o.id, o.user_id, o.order_number, o.booking_datetime,
+    o.reminder_24h_sent_at, o.reminder_2h_sent_at,
+    s.title AS service_title
+  FROM orders o
+  JOIN services s ON s.id = o.service_id
+  WHERE o.status IN ('confirmed', 'pandit_assigned', 'in_progress')
+    AND o.booking_datetime > NOW()
+    AND (
+      (o.reminder_24h_sent_at IS NULL AND o.booking_datetime <= NOW() + INTERVAL '24 hours')
+      OR
+      (o.reminder_2h_sent_at IS NULL AND o.booking_datetime <= NOW() + INTERVAL '2 hours')
+    )
+`;
+
+export const markReminderSent = (
+  column: "reminder_24h_sent_at" | "reminder_2h_sent_at"
+): string => `UPDATE orders SET ${column} = NOW() WHERE id = $1`;

@@ -534,7 +534,9 @@ export const createNotification = async (
   body: string,
   type: NotificationType,
   referenceType?: string,
-  referenceId?: string
+  referenceId?: string,
+  deepLink?: string | null,
+  imageUrl?: string | null
 ): Promise<void> => {
   try {
     const result = await pool.query(insertInboxSingle, [
@@ -545,8 +547,8 @@ export const createNotification = async (
       referenceType ?? null,
       referenceId ?? null,
       "sent",
-      null,
-      null,
+      imageUrl ?? null,
+      deepLink ?? null,
       null,
       null,
       null,
@@ -557,11 +559,13 @@ export const createNotification = async (
     void sendPushToUsers([userId], {
       title,
       body,
+      imageUrl: imageUrl ?? null,
       data: {
         type,
         notification_id: row?.id ?? "",
         reference_type: referenceType ?? "",
         reference_id: referenceId ?? "",
+        deep_link: deepLink ?? "",
       },
     }).catch((err) => logger.error("Transactional push failed", { err, userId, type }));
   } catch (err) {

@@ -7,6 +7,7 @@ import { countOrdersToday, findDuplicateBooking } from "../queries/order.queries
 import { findBookingById, finalizeCancellation, findLatestPaymentForOrder, freePanditAssignment } from "../queries/booking.queries";
 import { markPaymentRefunded } from "../queries/payment.queries";
 import { insertActivityLog } from "../queries/settings.queries";
+import { notifyBookingCancelled } from "./order-notification.service";
 
 export const computeBookingDateTime = (bookingDate: string, bookingTime: string, advanceBookingDays: number): Date => {
   const bookingDateTime = toISTDateTime(bookingDate, bookingTime);
@@ -152,6 +153,10 @@ export const cancelOrderWithRefund = async (
     oldData: { status: order.status },
     newData: { status: finalStatus },
   });
+
+  // Fires for both the customer cancel endpoint and the admin cancel endpoint —
+  // always addressed to the booking owner, not the actor.
+  void notifyBookingCancelled(updatedOrder, refundOutcome);
 
   return { order: updatedOrder, refundOutcome };
 };
