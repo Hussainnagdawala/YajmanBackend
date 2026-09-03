@@ -30,6 +30,12 @@ import {
 } from "../queries/payment.queries";
 import { insertCouponUsage, incrementCouponUsageCount } from "../queries/coupon.queries";
 import { logOrderActivity } from "../services/booking.service";
+import {
+  notifyBookingCreated,
+  notifyBookingConfirmed,
+  notifyPaymentFailed,
+  notifyRefundCompleted,
+} from "../services/order-notification.service";
 import { categoryRequiresBookingTime, resolveBookingTime } from "../utils/booking-time";
 
 interface PgError {
@@ -213,6 +219,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     await pool.query(createPayment, [order.id, razorpayOrder.id, totalAmount]);
 
+    void notifyBookingCreated(order as unknown as { id: string; user_id: string; order_number: string });
+
     return success(
       res,
       {
@@ -271,6 +279,10 @@ const finalizeSuccessfulPayment = async (
     }
 
     await client.query("COMMIT");
+    // Only reached on a real capture (the already-captured path returns above),
+    // so this fires exactly once whether the client verify call or the Razorpay
+    // webhook wins the race for the row lock.
+    void notifyBookingConfirmed(order);
     return order;
   } catch (err) {
     await client.query("ROLLBACK");
@@ -302,10 +314,11 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
       await pool.query(markPaymentFailed, [
         payment.id, "SIGNATURE_MISMATCH", "Razorpay signature verification failed", "signature_verification_failed",
       ]);
-      await pool.query(updateOrderStatus, [payment.order_id, "payment_failed"]);
+      const failedOrder = (await pool.query(updateOrderStatus, [payment.order_id, "payment_failed"])).rows[0];
       await logOrderActivity(req.user!.id, "payment_signature_mismatch", payment.order_id, {
         description: "Razorpay signature verification failed",
       });
+      if (failedOrder) void notifyPaymentFailed(failedOrder);
       throw new AppError("PAYMENT_FAILED", "Payment signature verification failed", 400);
     }
 
@@ -350,17 +363,19 @@ export const razorpayWebhook = async (req: Request, res: Response) => {
         await pool.query(markPaymentFailed, [
           payment.id, entity.error_code ?? null, entity.error_description ?? null, entity.error_reason ?? null,
         ]);
-        await pool.query(updateOrderStatus, [payment.order_id, "payment_failed"]);
+        const failedOrder = (await pool.query(updateOrderStatus, [payment.order_id, "payment_failed"])).rows[0];
         await logOrderActivity(undefined, "payment_webhook_failed", payment.order_id, {
           description: `Razorpay reported payment failure: ${entity.error_description ?? entity.error_code ?? "unknown"}`,
         });
+        if (failedOrder) void notifyPaymentFailed(failedOrder);
       }
     } else if (event === "refund.created") {
       const entity = req.body.payload?.refund?.entity;
       const payment = (await pool.query(findPaymentByRazorpayPaymentId, [entity.payment_id])).rows[0];
       if (payment && payment.status !== "refunded") {
         await pool.query(markPaymentRefunded, [payment.id, entity.amount / 100, entity.id]);
-        await pool.query(updateOrderStatus, [payment.order_id, "refunded"]);
+        const refundedOrder = (await pool.query(updateOrderStatus, [payment.order_id, "refunded"])).rows[0];
+        if (refundedOrder) void notifyRefundCompleted(refundedOrder);
       }
     } else if (event === "payment.dispute.created") {
       const entity = req.body.payload?.dispute?.entity;

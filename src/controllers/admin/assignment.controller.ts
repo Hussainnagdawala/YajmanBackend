@@ -4,6 +4,7 @@ import { success } from "../../utils/response";
 import { AppError } from "../../utils/errors";
 import { paginate } from "../../utils/pagination";
 import { createNotification } from "../../services/notification.service";
+import { notifyPanditAssigned } from "../../services/order-notification.service";
 import { updateOrderStatus } from "../../queries/order.queries";
 import {
   findOrderForAssignment,
@@ -62,6 +63,7 @@ export const createAssignment = async (req: Request, res: Response, next: NextFu
       "order",
       order_id
     );
+    void notifyPanditAssigned(order);
 
     return success(res, assignment, "Pandit assigned", 201);
   } catch (err) {
@@ -135,6 +137,7 @@ export const reassignPandit = async (req: Request, res: Response, next: NextFunc
       "order",
       order.id
     );
+    void notifyPanditAssigned(order);
 
     return success(res, updated, "Pandit reassigned");
   } catch (err) {

@@ -7,6 +7,7 @@ import { logger } from "../../config/logger";
 import { razorpay } from "../../config/razorpay";
 import { assertValidStatusTransition, cancelOrderWithRefund, logOrderActivity } from "../../services/booking.service";
 import { resolveInvoicePdfUrl } from "../../services/invoice.service";
+import { notifyOrderStatusChange } from "../../services/order-notification.service";
 import { findLatestPaymentForOrder } from "../../queries/booking.queries";
 import { markPaymentRefunded } from "../../queries/payment.queries";
 import {
@@ -91,6 +92,8 @@ export const updateOrderStatusAdmin = async (req: Request, res: Response, next: 
       oldData: { status: existing.rows[0].status },
       newData: { status },
     });
+
+    if (result.rows[0]) void notifyOrderStatusChange(result.rows[0], status);
 
     return success(res, result.rows[0], "Order status updated");
   } catch (err) {

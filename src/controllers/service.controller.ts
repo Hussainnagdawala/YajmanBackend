@@ -167,8 +167,13 @@ export const listServicesPublic = async (req: Request, res: Response, next: Next
     const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
     if (q.category) {
-      values.push(q.category);
-      whereClauses.push(isUuid(q.category) ? `s.category_id = $${values.length}` : `c.slug = $${values.length}`);
+      const catSlugsOrIds = q.category.split(",").map((c) => c.trim()).filter(Boolean);
+      values.push(catSlugsOrIds);
+      whereClauses.push(
+        isUuid(catSlugsOrIds[0])
+          ? `s.category_id = ANY($${values.length}::uuid[])`
+          : `c.slug = ANY($${values.length})`
+      );
     }
     if (q.type) {
       const typeSlugsOrIds = q.type.split(",").map((t) => t.trim());

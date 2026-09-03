@@ -109,6 +109,11 @@ const MIGRATIONS = [
     checkSql:
       "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='legal_pages')",
   },
+  {
+    file: "021_booking_reminder_flags.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name='reminder_24h_sent_at')",
+  },
 ];
 
 const buildClientConfig = () => {
