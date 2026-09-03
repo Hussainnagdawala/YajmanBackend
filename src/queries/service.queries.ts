@@ -239,6 +239,15 @@ export const maxServiceImageOrder = `
   SELECT COALESCE(MAX(display_order), -1)::int AS max_order FROM service_images WHERE service_id = $1
 `;
 
+// Reconciles the gallery on update: the admin form submits the full list of
+// URLs the user kept (removed ones are simply absent), so anything on this
+// service NOT in that list was removed and should be deleted.
+export const deleteServiceImagesNotIn = `
+  DELETE FROM service_images
+  WHERE service_id = $1 AND NOT (image_url = ANY($2::text[]))
+  RETURNING image_url
+`;
+
 // ─── Temples ─────────────────────────────────────────────────
 
 export const listAllTemples = `SELECT * FROM temples ORDER BY name`;

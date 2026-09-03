@@ -2,6 +2,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client } from "../config/s3";
 import { env } from "../config/env";
 import { pool } from "../config/database";
+import { logger } from "../config/logger";
 import { countInvoicesThisYear } from "../queries/invoice.queries";
 import { getSettingsByKeys } from "../queries/settings.queries";
 import { getSignedDownloadUrl, extractSpacesKey, spacesObjectExists } from "../utils/spaces";
@@ -109,11 +110,32 @@ export const ensureInvoicePdfUrl = async (
     storedKey = null;
   }
 
-  if (storedKey && (await spacesObjectExists(storedKey))) {
+  let objectMissing = false;
+  try {
+    objectMissing = !storedKey || !(await spacesObjectExists(storedKey));
+  } catch (err) {
+    // HEAD failed for a reason other than 404/403 (network, throttling). Don't
+    // block the download — fall through to signing the stored URL.
+    logger.warn("Invoice object HEAD check failed", { err, invoiceNumber });
+    objectMissing = false;
+  }
+
+  if (!objectMissing) {
     return { pdfUrl: await getSignedDownloadUrl(storedUrl) };
   }
 
-  const buffer = await generateInvoicePdf(invoiceData);
-  const freshUrl = await uploadInvoicePdf(buffer, invoiceNumber);
-  return { pdfUrl: (await getSignedDownloadUrl(freshUrl)) ?? freshUrl, correctedUrl: freshUrl };
+  // Object is gone — try to rebuild it from the stored invoice snapshot.
+  try {
+    if (!invoiceData || typeof invoiceData !== "object") {
+      throw new Error("invoice_data missing on invoice row");
+    }
+    const buffer = await generateInvoicePdf(invoiceData);
+    const freshUrl = await uploadInvoicePdf(buffer, invoiceNumber);
+    return { pdfUrl: (await getSignedDownloadUrl(freshUrl)) ?? freshUrl, correctedUrl: freshUrl };
+  } catch (err) {
+    logger.error("Invoice PDF regeneration failed", { err, invoiceNumber });
+    // Last resort: hand back a signed URL for the stored key so the caller
+    // gets a 200 with a link (even if that link 404s) rather than a 500.
+    return { pdfUrl: await getSignedDownloadUrl(storedUrl) };
+  }
 };

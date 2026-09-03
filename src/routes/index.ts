@@ -48,6 +48,7 @@ import addonRoutes from "./addon.routes";
 import bannerRoutes from "./banner.routes";
 import pujaProcessRoutes from "./puja-process.routes";
 import servicePlacementRoutes from "./service-placement.routes";
+import legalRoutes from "./legal.routes";
 
 const router = Router();
 
@@ -75,5 +76,6 @@ router.use("/app", appRoutes);
 router.use("/addons", addonRoutes);
 router.use("/puja-processes", pujaProcessRoutes);
 router.use("/service-placements", servicePlacementRoutes);
+router.use("/legal", legalRoutes);
 
 export default router;

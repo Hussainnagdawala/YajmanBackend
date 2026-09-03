@@ -7,6 +7,7 @@ import { paginate } from "../utils/pagination";
 import { generateUniqueSlug } from "../services/slug.service";
 import { deleteFromS3 } from "../services/upload.service";
 import { trackView } from "../services/analytics.service";
+import { logger } from "../config/logger";
 import { findCategoryFlags } from "../queries/category.queries";
 import { findPujaProcessByIdSimple } from "../queries/puja-process.queries";
 import {
@@ -39,6 +40,7 @@ import {
   insertServiceImage,
   findServiceImageById,
   deleteServiceImage as deleteServiceImageQuery,
+  deleteServiceImagesNotIn,
   maxServiceImageOrder,
   listAllTemples,
   createTemple as createTempleQuery,
@@ -476,7 +478,7 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     const existing = await client.query(findServiceById, [req.params.id]);
     if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Service not found", 404);
 
-    const { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs, custom_content, puja_process_id, ...rest } = req.body;
+    const { type_ids, tag_ids, temple_ids, addon_ids, packages, faqs, custom_content, puja_process_id, images, ...rest } = req.body;
     const files = req.files as MulterS3Files | undefined;
 
     if (puja_process_id) {
@@ -566,6 +568,18 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       type_ids: effectiveTypeIds, tag_ids, temple_ids: effectiveTempleIds, addon_ids, packages, faqs: effectiveFaqs,
     });
 
+    // `images` is the full list of gallery URLs the admin form kept — anything
+    // on the service missing from it was removed and needs deleting too.
+    let removedImageUrls: string[] = [];
+    if (images !== undefined) {
+      const kept = images as string[];
+      const removed = await client.query<{ image_url: string }>(deleteServiceImagesNotIn, [
+        req.params.id,
+        kept,
+      ]);
+      removedImageUrls = removed.rows.map((r) => r.image_url);
+    }
+
     if (files?.images && files.images.length > 0) {
       const maxOrder = await client.query<{ max_order: number }>(maxServiceImageOrder, [req.params.id]);
       let nextOrder = maxOrder.rows[0].max_order + 1;
@@ -576,6 +590,14 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     }
 
     await client.query("COMMIT");
+
+    if (removedImageUrls.length > 0) {
+      await Promise.all(
+        removedImageUrls.map((url) =>
+          deleteFromS3(url).catch((err) => logger.error("Failed to delete removed service image from S3", { err, url }))
+        )
+      );
+    }
 
     const detail = await pool.query(findServiceByIdDetail, [req.params.id]);
     return success(res, detail.rows[0], "Service updated", 200);

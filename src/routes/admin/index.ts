@@ -27,6 +27,7 @@ import addonRoutes from "./addon.routes";
 import galleryRoutes from "./gallery.routes";
 import exportRoutes from "./export.routes";
 import pujaProcessRoutes from "./puja-process.routes";
+import legalRoutes from "./legal.routes";
 
 const router = Router();
 
@@ -58,5 +59,6 @@ router.use("/addons", addonRoutes);
 router.use("/gallery", galleryRoutes);
 router.use("/export", exportRoutes);
 router.use("/puja-processes", pujaProcessRoutes);
+router.use("/legal-pages", legalRoutes);
 
 export default router;

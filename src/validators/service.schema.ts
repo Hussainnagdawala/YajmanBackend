@@ -227,6 +227,10 @@ export const updateServiceSchema = z.preprocess(
   key_features: jsonArrayOptional(z.string().trim().min(1, "Key feature cannot be empty")),
   packages: jsonArrayOptional(packageSchema),
   faqs: jsonArrayOptional(faqSchema),
+  // Full list of gallery image URLs the admin kept (sent as repeated form
+  // fields alongside any new file uploads). Anything on the service NOT in
+  // this list gets deleted — see updateService's reconciliation step.
+  images: jsonArrayOptional(z.string()),
   puja_process_id: z.preprocess(
     (val) => (val === "" ? null : val),
     z.string().uuid("Puja process must be a valid ID").nullable().optional()
