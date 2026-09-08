@@ -1,5 +1,6 @@
 // ─── Legal pages (Terms, Privacy, Cookies, Disclaimer, Return Policy) ──────
 // Fixed catalog — rows are seeded by migration, admin only ever updates them.
+// Slug regenerates from title on update (see legal.controller.ts).
 
 export const listActiveLegalPages = `
   SELECT slug, title, meta_title, meta_description, updated_at

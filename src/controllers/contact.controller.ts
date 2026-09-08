@@ -29,9 +29,10 @@ export const createServiceInquiry = async (req: Request, res: Response, next: Ne
     const service = serviceResult.rows[0];
     if (!service) throw new AppError("NOT_FOUND", "Service not found", 404);
 
-    const { name, email, phone, message } = req.body;
+    const { name, email, phone, message, birth_date, birth_time, birth_place } = req.body;
     const result = await pool.query(createServiceInquiryEntry, [
       name, email ?? null, phone, message ?? null, service.id, service.title, service.category_id, service.category_name,
+      birth_date ?? null, birth_time ?? null, birth_place ?? null,
     ]);
     return success(res, result.rows[0], "Inquiry submitted", 201);
   } catch (err) {

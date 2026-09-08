@@ -10,6 +10,7 @@ import {
   findLegalPageByIdAdmin,
   updateLegalPage as updateLegalPageQuery,
 } from "../queries/legal.queries";
+import { generateUniqueSlug } from "../services/slug.service";
 
 // ─── Public ─────────────────────────────────────────────────
 
@@ -64,7 +65,11 @@ export const updateLegalPageAdmin = async (req: Request, res: Response, next: Ne
       values.push(value);
     };
 
-    if (title !== undefined) push("title", title);
+    if (title !== undefined) {
+      push("title", title);
+      const newSlug = await generateUniqueSlug(title, "legal_pages", req.params.id);
+      push("slug", newSlug);
+    }
     if (content !== undefined) push("content", DOMPurify.sanitize(content));
     if (meta_title !== undefined) push("meta_title", meta_title);
     if (meta_description !== undefined) push("meta_description", meta_description);

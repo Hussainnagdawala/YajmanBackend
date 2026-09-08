@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationSchema } from "./common.schema";
+import { paginationSchema, dateStringSchema, timeStringSchema } from "./common.schema";
 
 export const createContactSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -14,6 +14,9 @@ export const createServiceInquirySchema = z.object({
   email: z.string().email().max(150).optional(),
   phone: z.string().regex(/^[6-9]\d{9}$/),
   message: z.string().trim().optional(),
+  birth_date: dateStringSchema.optional(),
+  birth_time: timeStringSchema.optional(),
+  birth_place: z.string().trim().max(150, "Birth place must be at most 150 characters").optional(),
 });
 
 export const updateContactEntrySchema = z.object({

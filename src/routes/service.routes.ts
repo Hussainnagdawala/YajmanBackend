@@ -201,6 +201,9 @@ router.post(
  *               email: { type: string, format: email, maxLength: 150 }
  *               phone: { type: string, pattern: '^[6-9]\d{9}$', example: '9876543210' }
  *               message: { type: string }
+ *               birth_date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', example: '1990-05-20' }
+ *               birth_time: { type: string, pattern: '^\d{2}:\d{2}$', example: '09:30' }
+ *               birth_place: { type: string, maxLength: 150 }
  *     responses:
  *       201:
  *         description: Inquiry submitted

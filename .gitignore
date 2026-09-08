@@ -9,3 +9,4 @@ package-lock.json
 uploads/*
 !uploads/.gitkeep
 dump/
+.zip
