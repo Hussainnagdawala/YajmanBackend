@@ -36,6 +36,9 @@ export const updatePanditProfileAdminSchema = z.object({
   is_available: z.coerce.boolean().optional(),
   is_verified: z.coerce.boolean().optional(),
   aadhaar_number: z.string().trim().regex(/^\d{12}$/).optional(),
+  // How many date-only (no real time slot) bookings this pandit can hold
+  // accepted on the same date — see pandit-availability.service.ts.
+  daily_booking_limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 export const assignPanditSchema = z.object({
@@ -79,7 +82,9 @@ export const listPanditsAdminQuerySchema = paginationSchema.extend({
 
 export const listAvailablePanditsQuerySchema = paginationSchema.extend({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/),
+  // Omitted for date-only bookings (no real time slot) — availability then
+  // checks each pandit's daily capacity instead of an exact-time collision.
+  time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
   search: z.string().trim().optional(),
   is_verified: z.coerce.boolean().optional(),
   city: z.string().trim().optional(),

@@ -6,6 +6,7 @@ import { paginate } from "../utils/pagination";
 import { hoursUntil } from "../utils/date";
 import { createNotification } from "../services/notification.service";
 import { recalculatePanditStats } from "../services/stats.service";
+import { assertPanditCapacityAvailable } from "../services/pandit-availability.service";
 import { findUserById, listAdminUserIds } from "../queries/user.queries";
 import { findBookingById } from "../queries/booking.queries";
 import { completeOrder } from "../queries/order.queries";
@@ -17,7 +18,6 @@ import {
   findAssignmentForPandit,
   updateAssignmentAccept,
   updateAssignmentReject,
-  isPanditDoubleBooked,
   findOrderForAssignment,
   listAssignmentsForPandit,
   countAssignmentsForPandit,
@@ -165,13 +165,9 @@ export const acceptAssignment = async (req: Request, res: Response, next: NextFu
 
     const orderResult = await pool.query(findOrderForAssignment, [assignment.order_id]);
     const order = orderResult.rows[0];
+    const pandit = (await pool.query(findPanditProfileById, [assignment.pandit_id])).rows[0];
 
-    const conflict = await pool.query(isPanditDoubleBooked, [
-      assignment.pandit_id, order.booking_date, order.booking_time, assignment.id,
-    ]);
-    if (conflict.rows.length > 0) {
-      throw new AppError("CONFLICT", "You already have an accepted booking at this date and time", 409);
-    }
+    await assertPanditCapacityAvailable(pandit, order, assignment.id);
 
     const updated = await pool.query(updateAssignmentAccept, [req.params.id, req.body.notes ?? null]);
 
@@ -356,7 +352,7 @@ export const listAvailablePandits = async (req: Request, res: Response, next: Ne
 
     const q = req.query as unknown as {
       date: string;
-      time: string;
+      time?: string;
       search?: string;
       is_verified?: boolean;
       city?: string;
@@ -365,7 +361,10 @@ export const listAvailablePandits = async (req: Request, res: Response, next: Ne
     };
     const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
 
-    const values: unknown[] = [q.date, q.time];
+    // Date-only bookings (no real time slot) omit `time` entirely — availability
+    // then runs off each pandit's daily capacity instead of an exact-time match.
+    const hasTime = Boolean(q.time);
+    const values: unknown[] = hasTime ? [q.date, q.time] : [q.date];
     const whereClauses: string[] = [];
     if (q.search) {
       values.push(`%${q.search}%`);
@@ -376,13 +375,20 @@ export const listAvailablePandits = async (req: Request, res: Response, next: Ne
       whereClauses.push(`pp.is_verified = $${values.length}`);
     }
     if (q.city) {
-      values.push(q.city);
-      whereClauses.push(`$${values.length} = ANY(pp.service_areas)`);
+      // service_areas is free text an admin typed on the pandit's profile, matched
+      // against free text the customer typed at checkout — an exact match (ANY())
+      // silently returned zero pandits on any casing/whitespace difference between
+      // the two. ILIKE against unnest() tolerates that.
+      values.push(`%${q.city.trim()}%`);
+      whereClauses.push(`EXISTS (SELECT 1 FROM unnest(pp.service_areas) sa WHERE sa ILIKE $${values.length})`);
     }
 
     const [rows, count] = await Promise.all([
-      pool.query(listAvailablePanditsQuery(whereClauses, values.length + 1, values.length + 2), [...values, safeLimit, offset]),
-      pool.query<{ count: number }>(countAvailablePandits(whereClauses), values),
+      pool.query(
+        listAvailablePanditsQuery(whereClauses, values.length + 1, values.length + 2, hasTime),
+        [...values, safeLimit, offset]
+      ),
+      pool.query<{ count: number }>(countAvailablePandits(whereClauses, hasTime), values),
     ]);
 
     return success(res, rows.rows, "Available pandits fetched", 200, meta(count.rows[0].count));

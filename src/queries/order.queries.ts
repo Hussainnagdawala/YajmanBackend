@@ -47,16 +47,55 @@ export const completeOrder = `
   UPDATE orders SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *
 `;
 
+// ─── Follow-up alerts (booking-followup.cron.ts) ───────────────
+
+// Orders whose category needs a pandit, still sitting 'confirmed' (nobody has
+// even been assigned yet) with the booking date within 24h — admin needs a
+// heads-up while there's still time to find someone, not after it's too late.
+export const findUnassignedBookingsNearingDate = `
+  SELECT o.id, o.order_number, o.booking_datetime
+  FROM orders o
+  JOIN services s ON s.id = o.service_id
+  JOIN categories c ON c.id = s.category_id
+  WHERE o.status = 'confirmed'
+    AND c.requires_pandit = true
+    AND o.booking_datetime > NOW()
+    AND o.booking_datetime <= NOW() + INTERVAL '24 hours'
+    AND o.unassigned_alert_sent_at IS NULL
+`;
+
+export const markUnassignedAlertSent = `
+  UPDATE orders SET unassigned_alert_sent_at = NOW() WHERE id = $1
+`;
+
+// Bookings whose date has passed (2h grace period, in case the service just
+// ran long) with the order still not resolved — never marked completed, and
+// not cancelled/refunded/payment_failed/disputed either. Covers every flavor
+// of "fell through the cracks": nobody assigned, assignment expired/rejected
+// and never replaced, or a pandit accepted but nobody ever marked it done.
+export const findOverdueUnresolvedBookings = `
+  SELECT o.id, o.order_number, o.booking_datetime, o.status
+  FROM orders o
+  WHERE o.status IN ('confirmed', 'pandit_assigned', 'in_progress')
+    AND o.booking_datetime <= NOW() - INTERVAL '2 hours'
+    AND o.overdue_alert_sent_at IS NULL
+`;
+
+export const markOverdueAlertSent = `
+  UPDATE orders SET overdue_alert_sent_at = NOW() WHERE id = $1
+`;
+
 // ─── Admin: order management ─────────────────────────────────
 
 export const listOrdersAdmin = (whereClauses: string[], limitIdx: number, offsetIdx: number) => `
-  SELECT o.*, s.title AS service_title, s.slug AS service_slug,
+  SELECT o.*, s.title AS service_title, s.slug AS service_slug, c.requires_booking_time,
     (
       SELECT pa.status FROM pandit_assignments pa
       WHERE pa.order_id = o.id ORDER BY pa.assigned_at DESC LIMIT 1
     ) AS assignment_status
   FROM orders o
   JOIN services s ON s.id = o.service_id
+  JOIN categories c ON c.id = s.category_id
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
   ORDER BY o.created_at DESC
   LIMIT $${limitIdx} OFFSET $${offsetIdx}
@@ -69,9 +108,13 @@ export const countOrdersAdmin = (whereClauses: string[]) => `
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
 `;
 
+// requires_booking_time: booking_time is never NULL (defaults to 09:00 server-side
+// for date-only categories) — this flag tells the client whether that value is a
+// real customer-chosen slot or just the internal default used for double-booking
+// matching, so the UI can decide whether to display it.
 export const findOrderDetailAdmin = `
   SELECT o.*,
-    s.title AS service_title, s.slug AS service_slug,
+    s.title AS service_title, s.slug AS service_slug, c.requires_booking_time,
     cu.name AS cancelled_by_name,
     -- Convenience copy of the latest row in assignments[] below — so the UI
     -- can show "awaiting confirmation" vs "confirmed" vs "expired, needs
@@ -146,6 +189,7 @@ export const findOrderDetailAdmin = `
     ) ELSE NULL END AS coupon
   FROM orders o
   JOIN services s ON s.id = o.service_id
+  JOIN categories c ON c.id = s.category_id
   LEFT JOIN users cu ON cu.id = o.cancelled_by
   WHERE o.id = $1
 `;

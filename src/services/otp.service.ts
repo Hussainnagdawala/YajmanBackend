@@ -52,9 +52,9 @@ const sendViaWhatsApp = async (phone: string, countryCode: string, otp: string):
 
 const sendViaProvider = async (phone: string, countryCode: string, otp: string): Promise<void> => {
   if (env.OTP_PROVIDER === "whatsapp") {
-    // TEMP: WhatsApp send disabled — OTP is fixed to 123456 for now.
-    // Re-enable by uncommenting the sendViaWhatsApp call below and restoring
-    // the real OTP in sendOtp().
+    // TEMP: WhatsApp phone number's Meta verification expired (403 on send) —
+    // skip the real call so send-otp doesn't 502 while that's unfixed. Revert
+    // (remove this early return) once the number is re-verified.
     logger.debug(`[OTP:whatsapp:disabled] ${countryCode}${phone} -> ${otp}`);
     return;
     // if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
@@ -89,7 +89,9 @@ const sendViaProvider = async (phone: string, countryCode: string, otp: string):
 };
 
 export const sendOtp = async (phone: string, countryCode: string): Promise<{ expires_in: number }> => {
-  // TEMP: fixed OTP while WhatsApp send is disabled. Restore: generateOtp(6)
+  // TEMP: WhatsApp phone number's Meta verification expired (403 on send) —
+  // fixed OTP until that's re-verified in WhatsApp Manager. Revert to
+  // generateOtp(6) once fixed.
   const otp = "123456";
   const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MINUTES * 60 * 1000);
 

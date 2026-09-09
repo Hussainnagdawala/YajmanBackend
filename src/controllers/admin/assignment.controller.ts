@@ -5,11 +5,11 @@ import { AppError } from "../../utils/errors";
 import { paginate } from "../../utils/pagination";
 import { createNotification } from "../../services/notification.service";
 import { notifyPanditAssigned } from "../../services/order-notification.service";
+import { assertPanditCapacityAvailable } from "../../services/pandit-availability.service";
 import { updateOrderStatus } from "../../queries/order.queries";
 import {
   findOrderForAssignment,
   findPanditProfileById,
-  isPanditDoubleBooked,
   createAssignment as createAssignmentQuery,
   findAssignmentById,
   reassignAssignment as reassignAssignmentQuery,
@@ -44,10 +44,7 @@ export const createAssignment = async (req: Request, res: Response, next: NextFu
       throw new AppError("VALIDATION_ERROR", "A pandit cannot be assigned to their own order", 400);
     }
 
-    const conflict = await pool.query(isPanditDoubleBooked, [pandit_id, order.booking_date, order.booking_time, null]);
-    if (conflict.rows.length > 0) {
-      throw new AppError("CONFLICT", "This pandit already has an accepted booking at this date and time", 409);
-    }
+    await assertPanditCapacityAvailable(pandit, order, null);
 
     const respondBy = new Date(Date.now() + RESPOND_WINDOW_HOURS * 60 * 60 * 1000);
     const assignment = (
@@ -120,10 +117,7 @@ export const reassignPandit = async (req: Request, res: Response, next: NextFunc
       throw new AppError("VALIDATION_ERROR", "A pandit cannot be assigned to their own order", 400);
     }
 
-    const conflict = await pool.query(isPanditDoubleBooked, [pandit_id, order.booking_date, order.booking_time, assignment.id]);
-    if (conflict.rows.length > 0) {
-      throw new AppError("CONFLICT", "This pandit already has an accepted booking at this date and time", 409);
-    }
+    await assertPanditCapacityAvailable(pandit, order, assignment.id);
 
     const respondBy = new Date(Date.now() + RESPOND_WINDOW_HOURS * 60 * 60 * 1000);
     const updated = (await pool.query(reassignAssignmentQuery, [req.params.id, pandit_id, respondBy])).rows[0];

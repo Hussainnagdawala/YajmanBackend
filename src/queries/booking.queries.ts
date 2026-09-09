@@ -11,10 +11,16 @@ const STATUS_GROUPS: Record<string, string> = {
     "o.status IN ('cancelled', 'refunded', 'payment_failed', 'refund_failed', 'disputed')",
 };
 
+// requires_booking_time: booking_time is never NULL (defaults to 09:00 server-side
+// for date-only categories, see resolveBookingTime) so a double-booking match
+// always has something to compare — this flag is how the client knows that
+// value isn't a real customer-chosen slot and shouldn't be displayed as one.
 export const listBookings = (statusGroup: string | undefined, limitIdx: number, offsetIdx: number) => `
-  SELECT o.*, s.title AS service_title, s.slug AS service_slug, s.feature_image_url AS service_image
+  SELECT o.*, s.title AS service_title, s.slug AS service_slug, s.feature_image_url AS service_image,
+    c.requires_booking_time
   FROM orders o
   JOIN services s ON s.id = o.service_id
+  JOIN categories c ON c.id = s.category_id
   WHERE o.user_id = $1 ${statusGroup ? `AND ${STATUS_GROUPS[statusGroup]}` : ""}
   ORDER BY o.booking_datetime DESC
   LIMIT $${limitIdx} OFFSET $${offsetIdx}

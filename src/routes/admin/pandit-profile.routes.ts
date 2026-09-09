@@ -73,7 +73,8 @@ router.get("/", validate(listPanditsAdminQuerySchema, "query"), panditController
  *         schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
  *       - in: query
  *         name: time
- *         required: true
+ *         required: false
+ *         description: Omit for date-only bookings (no real time slot) — availability then runs off each pandit's daily capacity instead of an exact-time match.
  *         schema: { type: string, pattern: '^\d{2}:\d{2}(:\d{2})?$' }
  *       - in: query
  *         name: page
@@ -175,6 +176,7 @@ router.get("/:id", panditController.getPanditAdmin);
  *               is_available: { type: boolean }
  *               is_verified: { type: boolean }
  *               aadhaar_number: { type: string, pattern: '^\d{12}$' }
+ *               daily_booking_limit: { type: integer, minimum: 1, maximum: 50, description: How many date-only (no real time slot) bookings this pandit can hold accepted on the same date }
  *               profile_image: { type: string, format: binary }
  *     responses:
  *       200:

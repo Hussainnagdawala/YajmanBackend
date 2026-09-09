@@ -36,7 +36,7 @@ import {
   notifyPaymentFailed,
   notifyRefundCompleted,
 } from "../services/order-notification.service";
-import { categoryRequiresBookingTime, resolveBookingTime } from "../utils/booking-time";
+import { categoryRequiresBookingTime, resolveBookingTime, resolveStoredBookingTime } from "../utils/booking-time";
 
 interface PgError {
   code?: string;
@@ -141,6 +141,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         { field: "booking_time", message: "A time slot is required for this service category" },
       ]);
     }
+    // What actually lands in orders.booking_time — null for date-only categories,
+    // so nothing downstream mistakes resolvedBookingTime's anchor for a real slot.
+    const storedBookingTime = resolveStoredBookingTime(
+      { requires_booking_time: service.requires_booking_time, slug: service.category_slug },
+      booking_time
+    );
 
     const bookingDateTime = computeBookingDateTime(booking_date, resolvedBookingTime, service.advance_booking_days);
     await assertNoDuplicateBooking(userId, service_id, booking_date);
@@ -193,7 +199,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       [
         userId, service_id, customer_name, customer_phone, customer_whatsapp ?? null,
         customer_calling_number ?? null, customer_email ?? null, gotra ?? null, gotra_unknown,
-        booking_date, resolvedBookingTime, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
+        booking_date, storedBookingTime, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
         basePrice, discountAmount, convenienceFee, totalAmount, couponId, couponCode,
         birth_date ?? null, birth_time ?? null, birth_place ?? null, special_instructions ?? null,
         addonTotal,
