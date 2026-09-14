@@ -51,13 +51,14 @@ export const updateCategorySchema = z.object({
 export const createTypeSchema = z.object({
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().optional(),
-  display_order: z.coerce.number().int().default(0),
+  // Omit to auto-assign the next free slot. If sent, must be unique (see controller).
+  display_order: z.coerce.number().int().nonnegative().optional(),
 });
 
 export const updateTypeSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().optional(),
-  display_order: z.coerce.number().int().optional(),
+  display_order: z.coerce.number().int().nonnegative().optional(),
   is_active: z.coerce.boolean().optional(),
 });
 

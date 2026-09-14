@@ -34,4 +34,24 @@ const router = Router();
  */
 router.get("/", homeController.listPopularSearchesPublic);
 
+/**
+ * @openapi
+ * /popular-searches/{id}/services:
+ *   get:
+ *     tags: [Popular Searches]
+ *     summary: List services curated for a popular search (for chips mapped to a specific set of services)
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Curated services fetched
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ */
+router.get("/:id/services", homeController.listPopularSearchServicesPublic);
+
 export default router;

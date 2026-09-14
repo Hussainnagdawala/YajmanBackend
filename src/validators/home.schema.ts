@@ -19,6 +19,10 @@ export const updatePopularSearchSchema = z.object({
   is_active: z.coerce.boolean().optional(),
 });
 
+export const setPopularSearchServicesSchema = z.object({
+  service_ids: z.array(z.string().uuid()),
+});
+
 const BANNER_POSITIONS = [
   "hero_slider",
   "middle_ad",

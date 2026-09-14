@@ -22,6 +22,7 @@ export const createOrderSchema = z.object({
   birth_date: dateStringSchema.optional().nullable(),
   birth_time: timeStringSchema.optional().nullable(),
   birth_place: z.string().trim().max(150, "Birth place must be at most 150 characters").optional().nullable(),
+  preferences: z.array(z.enum(["experienced_pandit", "shastriya_vidhi", "full_video"])).optional().default([]),
 });
 
 export const verifyPaymentSchema = z.object({

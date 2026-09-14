@@ -41,6 +41,15 @@ const envSchema = z.object({
   // only if your template has no button component
   WHATSAPP_OTP_HAS_BUTTON: z.string().default("true").transform((v) => v !== "false"),
 
+  // WABA NXC (BSP) — used when OTP_PROVIDER=nxc
+  NXC_API_URL: z.string().default("https://waba.nxccontrols.in/api/create-message"),
+  NXC_APP_KEY: z.string().default(""),
+  NXC_AUTH_KEY: z.string().default(""),
+  NXC_OTP_TEMPLATE_ID: z.string().default(""),
+  NXC_OTP_LANG: z.string().default("en_us"),
+  // set to "false" if the template's button has no dynamic URL variable
+  NXC_OTP_HAS_BUTTON: z.string().default("true").transform((v) => v !== "false"),
+
   RAZORPAY_KEY_ID: z.string().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),
   RAZORPAY_WEBHOOK_SECRET: z.string().min(1, "RAZORPAY_WEBHOOK_SECRET is required"),

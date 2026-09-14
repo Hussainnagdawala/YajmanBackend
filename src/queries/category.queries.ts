@@ -99,6 +99,14 @@ export const listAllTypes = `SELECT * FROM types ORDER BY display_order, name`;
 
 export const findTypeById = `SELECT * FROM types WHERE id = $1`;
 
+export const findTypeByDisplayOrder = `
+  SELECT id, name FROM types
+  WHERE display_order = $1 AND ($2::uuid IS NULL OR id != $2)
+  LIMIT 1
+`;
+
+export const getMaxTypeDisplayOrder = `SELECT COALESCE(MAX(display_order), -1) AS max FROM types`;
+
 export const createType = `
   INSERT INTO types (name, slug, description, image_url, icon_url, display_order)
   VALUES ($1, $2, $3, $4, $5, $6)

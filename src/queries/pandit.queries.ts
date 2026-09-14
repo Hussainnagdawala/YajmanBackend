@@ -244,7 +244,7 @@ export const countAssignmentsForPandit = (whereClauses: string[]) => `
 
 export const findAssignmentDetailForPandit = `
   SELECT pa.*, o.order_number, o.booking_date, o.booking_time, o.booking_datetime, o.customer_name, o.customer_phone,
-    o.address, o.city, o.pincode, o.total_amount, s.title AS service_title, s.slug AS service_slug,
+    o.address, o.city, o.pincode, o.total_amount, o.preferences, s.title AS service_title, s.slug AS service_slug,
     c.requires_booking_time
   FROM pandit_assignments pa
   JOIN orders o ON o.id = pa.order_id

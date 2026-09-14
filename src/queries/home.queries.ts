@@ -1,7 +1,11 @@
 // ─── Popular searches ────────────────────────────────────────
 
 export const listActivePopularSearches = `
-  SELECT * FROM popular_searches WHERE is_active = true ORDER BY row_number, display_order
+  SELECT ps.*,
+    EXISTS (SELECT 1 FROM popular_search_services pss WHERE pss.popular_search_id = ps.id) AS has_curated_services
+  FROM popular_searches ps
+  WHERE ps.is_active = true
+  ORDER BY ps.row_number, ps.display_order
 `;
 export const listAllPopularSearches = `SELECT * FROM popular_searches ORDER BY row_number, display_order`;
 export const createPopularSearch = `
@@ -16,6 +20,23 @@ export const updatePopularSearch = (fields: string[]) => `
 `;
 export const softDeletePopularSearch = `UPDATE popular_searches SET is_active = false WHERE id = $1 RETURNING *`;
 export const hardDeletePopularSearch = `DELETE FROM popular_searches WHERE id = $1 RETURNING *`;
+
+// Curated services mapped directly to a popular search (see 025_popular_search_services.sql)
+export const listServicesForPopularSearch = `
+  SELECT s.*, c.name AS category_name, c.slug AS category_slug, c.requires_payment
+  FROM popular_search_services pss
+  JOIN services s ON s.id = pss.service_id
+  JOIN categories c ON c.id = s.category_id
+  WHERE pss.popular_search_id = $1 AND s.is_active = true AND s.status = 'published'
+  ORDER BY pss.display_order ASC
+`;
+export const clearPopularSearchServices = `DELETE FROM popular_search_services WHERE popular_search_id = $1`;
+export const setPopularSearchServices = `
+  INSERT INTO popular_search_services (popular_search_id, service_id, display_order)
+  SELECT $1, service_id, ord - 1
+  FROM unnest($2::uuid[]) WITH ORDINALITY AS t(service_id, ord)
+  ON CONFLICT (popular_search_id, service_id) DO NOTHING
+`;
 
 // ─── Banners ─────────────────────────────────────────────────
 

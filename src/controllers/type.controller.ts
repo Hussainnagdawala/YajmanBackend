@@ -12,7 +12,30 @@ import {
   softDeleteType,
   hardDeleteType,
   countServicesByType,
+  findTypeByDisplayOrder,
+  getMaxTypeDisplayOrder,
 } from "../queries/category.queries";
+
+// display_order must be globally unique across types (idx_types_display_order_unique).
+const assertUniqueDisplayOrder = async (displayOrder: number, excludeId?: string): Promise<void> => {
+  const result = await pool.query<{ id: string; name: string }>(findTypeByDisplayOrder, [
+    displayOrder,
+    excludeId ?? null,
+  ]);
+  if (result.rows[0]) {
+    throw new AppError("CONFLICT", "This display order is already used by another type", 409, [
+      {
+        field: "display_order",
+        message: `Display order ${displayOrder} is already assigned to "${result.rows[0].name}"`,
+      },
+    ]);
+  }
+};
+
+const nextDisplayOrder = async (): Promise<number> => {
+  const result = await pool.query<{ max: number }>(getMaxTypeDisplayOrder);
+  return Number(result.rows[0].max) + 1;
+};
 
 export const listTypes = async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -40,7 +63,15 @@ export const createType = async (req: Request, res: Response, next: NextFunction
     const iconUrl = (files?.["icon"]?.[0] as Express.MulterS3.File | undefined)?.location ?? null;
     const slug = await generateUniqueSlug(name, "types");
 
-    const result = await pool.query(createTypeQuery, [name, slug, description ?? null, imageUrl, iconUrl, display_order ?? 0]);
+    let finalDisplayOrder: number;
+    if (display_order === undefined || display_order === null) {
+      finalDisplayOrder = await nextDisplayOrder();
+    } else {
+      await assertUniqueDisplayOrder(display_order);
+      finalDisplayOrder = display_order;
+    }
+
+    const result = await pool.query(createTypeQuery, [name, slug, description ?? null, imageUrl, iconUrl, finalDisplayOrder]);
     return success(res, result.rows[0], "Type created", 201);
   } catch (err) {
     next(err);
@@ -55,6 +86,9 @@ export const updateType = async (req: Request, res: Response, next: NextFunction
     for (const [key, value] of Object.entries(req.body)) {
       fields.push(key);
       values.push(value);
+    }
+    if (req.body.display_order !== undefined && req.body.display_order !== null) {
+      await assertUniqueDisplayOrder(req.body.display_order as number, req.params.id);
     }
     if (fields.includes("name")) {
       const newSlug = await generateUniqueSlug(req.body.name, "types", req.params.id);

@@ -10,6 +10,9 @@ import {
   updatePopularSearch as updatePopularSearchQuery,
   softDeletePopularSearch,
   hardDeletePopularSearch,
+  listServicesForPopularSearch,
+  clearPopularSearchServices,
+  setPopularSearchServices,
   listActiveBannersByPosition,
   listAllBanners,
   createBanner as createBannerQuery,
@@ -40,6 +43,19 @@ export const listPopularSearchesPublic = async (
 ) => {
   try {
     const result = await pool.query(listActivePopularSearches);
+    return success(res, result.rows);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const listPopularSearchServicesPublic = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const result = await pool.query(listServicesForPopularSearch, [req.params.id]);
     return success(res, result.rows);
   } catch (err) {
     next(err);
@@ -206,6 +222,53 @@ export const deletePopularSearchPermanently = async (
     return success(res, result.rows[0], "Popular search permanently deleted");
   } catch (err) {
     next(err);
+  }
+};
+
+// Replace-all, same clear-then-set shape as replaceServiceRelations in
+// service.controller.ts (service_types/service_tags) — order in service_ids
+// becomes display_order.
+export const setPopularSearchServicesAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { service_ids } = req.body as { service_ids: string[] };
+
+    const exists = await client.query(`SELECT id FROM popular_searches WHERE id = $1`, [id]);
+    if (!exists.rows[0]) throw new AppError("NOT_FOUND", "Popular search not found", 404);
+
+    if (service_ids.length > 0) {
+      const typeCheck = await client.query(
+        `SELECT DISTINCT c.requires_payment
+         FROM services s JOIN categories c ON c.id = s.category_id
+         WHERE s.id = ANY($1::uuid[])`,
+        [service_ids],
+      );
+      if (typeCheck.rows.length > 1) {
+        throw new AppError(
+          "VALIDATION_ERROR",
+          "Selected services must all be either payment or non-payment services — mixing types under one popular search is not allowed",
+          400,
+        );
+      }
+    }
+
+    await client.query("BEGIN");
+    await client.query(clearPopularSearchServices, [id]);
+    if (service_ids.length > 0) await client.query(setPopularSearchServices, [id, service_ids]);
+    await client.query("COMMIT");
+
+    const result = await pool.query(listServicesForPopularSearch, [id]);
+    return success(res, result.rows, "Popular search services updated");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    next(err);
+  } finally {
+    client.release();
   }
 };
 

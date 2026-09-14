@@ -1,7 +1,11 @@
 import { Router } from "express";
 import * as homeController from "../../controllers/home.controller";
 import { validate } from "../../middleware/validate";
-import { createPopularSearchSchema, updatePopularSearchSchema } from "../../validators/home.schema";
+import {
+  createPopularSearchSchema,
+  updatePopularSearchSchema,
+  setPopularSearchServicesSchema,
+} from "../../validators/home.schema";
 
 const router = Router();
 
@@ -162,5 +166,48 @@ router.delete("/:id", homeController.deletePopularSearch);
  *         $ref: '#/components/responses/NotFound'
  */
 router.delete("/:id/permanent", homeController.deletePopularSearchPermanently);
+
+/**
+ * @openapi
+ * /admin/popular-searches/{id}/services:
+ *   put:
+ *     tags: [Admin: Popular Searches]
+ *     summary: Replace the curated set of services mapped to a popular search
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [service_ids]
+ *             properties:
+ *               service_ids:
+ *                 type: array
+ *                 items: { type: string, format: uuid }
+ *                 description: Order determines display_order
+ *     responses:
+ *       200:
+ *         description: Mapped services updated
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.put(
+  "/:id/services",
+  validate(setPopularSearchServicesSchema),
+  homeController.setPopularSearchServicesAdmin
+);
 
 export default router;

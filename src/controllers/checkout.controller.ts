@@ -95,7 +95,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const {
       service_id, booking_date, booking_time, customer_name, customer_phone, customer_whatsapp,
       customer_calling_number, customer_email, members, addon_ids, gotra, gotra_unknown, coupon_code,
-      address, city, pincode, special_instructions, birth_date, birth_time, birth_place,
+      address, city, pincode, special_instructions, birth_date, birth_time, birth_place, preferences,
     } = req.body;
     const userId = req.user!.id;
 
@@ -202,7 +202,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         booking_date, storedBookingTime, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
         basePrice, discountAmount, convenienceFee, totalAmount, couponId, couponCode,
         birth_date ?? null, birth_time ?? null, birth_place ?? null, special_instructions ?? null,
-        addonTotal,
+        addonTotal, preferences ?? [],
       ],
       members,
       selectedAddons

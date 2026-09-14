@@ -50,19 +50,48 @@ const sendViaWhatsApp = async (phone: string, countryCode: string, otp: string):
   }
 };
 
+const sendViaNxc = async (phone: string, countryCode: string, otp: string): Promise<void> => {
+  const form = new FormData();
+  form.append("appkey", env.NXC_APP_KEY);
+  form.append("authkey", env.NXC_AUTH_KEY);
+  form.append("to", `${countryCode.replace("+", "")}${phone}`);
+  form.append("template_id", env.NXC_OTP_TEMPLATE_ID);
+  form.append("language", env.NXC_OTP_LANG);
+  form.append("variables[{variableKey1}]", otp);
+  // dynamic URL button (copy-code autofill) has its own placeholder,
+  // numbered sequentially after the body variable — needs the same OTP again
+  if (env.NXC_OTP_HAS_BUTTON) {
+    form.append("variables[{variableKey2}]", otp);
+  }
+
+  const res = await fetch(env.NXC_API_URL, { method: "POST", body: form });
+  const body = await res.text();
+
+  if (!res.ok) {
+    logger.error("NXC OTP send failed", { status: res.status, body });
+    throw new AppError("OTP_SEND_FAILED", "Failed to send OTP", 502);
+  }
+
+  logger.info("NXC OTP send response", { status: res.status, body });
+};
+
 const sendViaProvider = async (phone: string, countryCode: string, otp: string): Promise<void> => {
-  if (env.OTP_PROVIDER === "whatsapp") {
-    // TEMP: WhatsApp phone number's Meta verification expired (403 on send) —
-    // skip the real call so send-otp doesn't 502 while that's unfixed. Revert
-    // (remove this early return) once the number is re-verified.
-    logger.debug(`[OTP:whatsapp:disabled] ${countryCode}${phone} -> ${otp}`);
+  if (env.OTP_PROVIDER === "nxc") {
+    if (!env.NXC_APP_KEY || !env.NXC_AUTH_KEY) {
+      logger.debug(`[OTP:nxc:dev] ${countryCode}${phone} -> ${otp}`);
+      return;
+    }
+    await sendViaNxc(phone, countryCode, otp);
     return;
-    // if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
-    //   logger.debug(`[OTP:whatsapp:dev] ${countryCode}${phone} -> ${otp}`);
-    //   return;
-    // }
-    // await sendViaWhatsApp(phone, countryCode, otp);
-    // return;
+  }
+
+  if (env.OTP_PROVIDER === "whatsapp") {
+    if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
+      logger.debug(`[OTP:whatsapp:dev] ${countryCode}${phone} -> ${otp}`);
+      return;
+    }
+    await sendViaWhatsApp(phone, countryCode, otp);
+    return;
   }
 
   if (env.NODE_ENV !== "production" || !env.OTP_API_KEY) {
@@ -89,9 +118,8 @@ const sendViaProvider = async (phone: string, countryCode: string, otp: string):
 };
 
 export const sendOtp = async (phone: string, countryCode: string): Promise<{ expires_in: number }> => {
-  // TEMP: WhatsApp phone number's Meta verification expired (403 on send) —
-  // fixed OTP until that's re-verified in WhatsApp Manager. Revert to
-  // generateOtp(6) once fixed.
+  // TEMP: WhatsApp/NXC send disabled, fixed OTP for testing. Revert to
+  // generateOtp(6) + sendViaProvider(...) once re-enabled.
   const otp = "123456";
   const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MINUTES * 60 * 1000);
 
@@ -101,7 +129,8 @@ export const sendOtp = async (phone: string, countryCode: string): Promise<{ exp
     [phone, countryCode, otp, PURPOSE_LOGIN, expiresAt]
   );
 
-  await sendViaProvider(phone, countryCode, otp);
+  // await sendViaProvider(phone, countryCode, otp);
+  logger.debug(`[OTP:disabled] ${countryCode}${phone} -> ${otp}`);
 
   return { expires_in: env.OTP_EXPIRY_MINUTES * 60 };
 };
@@ -138,3 +167,4 @@ export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
 
   await pool.query(`UPDATE otp_verifications SET is_verified = true WHERE id = $1`, [record.id]);
 };
+ 

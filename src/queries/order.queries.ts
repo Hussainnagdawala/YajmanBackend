@@ -14,13 +14,13 @@ export const createOrder = `
     customer_calling_number, customer_email, gotra, gotra_unknown, booking_date, booking_time,
     booking_datetime, address, city, pincode, base_price, discount_amount, convenience_fee,
     total_amount, coupon_id, coupon_code, birth_date, birth_time, birth_place, special_instructions,
-    addon_total
+    addon_total, preferences
   ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12,
     $13, $14, $15, $16, $17, $18, $19,
     $20, $21, $22, $23, $24, $25, $26,
-    $27
+    $27, $28
   )
   RETURNING *
 `;
@@ -92,7 +92,13 @@ export const listOrdersAdmin = (whereClauses: string[], limitIdx: number, offset
     (
       SELECT pa.status FROM pandit_assignments pa
       WHERE pa.order_id = o.id ORDER BY pa.assigned_at DESC LIMIT 1
-    ) AS assignment_status
+    ) AS assignment_status,
+    (
+      SELECT pp.display_name FROM pandit_assignments pa
+      JOIN pandit_profiles pp ON pp.id = pa.pandit_id
+      WHERE pa.order_id = o.id AND pa.status IN ('pending', 'accepted', 'completed')
+      ORDER BY pa.assigned_at DESC LIMIT 1
+    ) AS pandit_name
   FROM orders o
   JOIN services s ON s.id = o.service_id
   JOIN categories c ON c.id = s.category_id
