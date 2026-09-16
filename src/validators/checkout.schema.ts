@@ -11,6 +11,13 @@ export const createOrderSchema = z.object({
   customer_calling_number: phoneSchema.optional().nullable(),
   customer_email: z.string().email("Email must be a valid email address").max(150, "Email must be at most 150 characters").optional(),
   members: z.array(z.string().trim().min(1, "Member name cannot be empty")).min(1, "At least one member name is required"),
+  quantity: z.coerce
+    .number({ invalid_type_error: "Quantity must be a valid number" })
+    .int("Quantity must be a whole number")
+    .min(1, "Quantity must be at least 1")
+    .max(99, "Quantity must be at most 99")
+    .optional()
+    .default(1),
   addon_ids: z.array(z.string().uuid("Each add-on must be a valid ID")).optional().default([]),
   gotra: z.string().trim().max(100, "Gotra must be at most 100 characters").optional(),
   gotra_unknown: z.coerce.boolean().default(false),

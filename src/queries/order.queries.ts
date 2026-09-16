@@ -12,15 +12,15 @@ export const createOrder = `
   INSERT INTO orders (
     order_number, user_id, service_id, customer_name, customer_phone, customer_whatsapp,
     customer_calling_number, customer_email, gotra, gotra_unknown, booking_date, booking_time,
-    booking_datetime, address, city, pincode, base_price, discount_amount, convenience_fee,
+    booking_datetime, address, city, pincode, quantity, unit_price, base_price, discount_amount, convenience_fee,
     total_amount, coupon_id, coupon_code, birth_date, birth_time, birth_place, special_instructions,
     addon_total, preferences
   ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10, $11, $12,
-    $13, $14, $15, $16, $17, $18, $19,
-    $20, $21, $22, $23, $24, $25, $26,
-    $27, $28
+    $13, $14, $15, $16, $17, $18, $19, $20, $21,
+    $22, $23, $24, $25, $26, $27, $28,
+    $29, $30
   )
   RETURNING *
 `;

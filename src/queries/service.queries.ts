@@ -11,7 +11,7 @@ export const createService = `
     is_featured, is_bestseller, display_order, meta_title, meta_description, created_by,
     is_addon_available, benefits, key_features,
     availability_start_date, availability_end_date, booking_availability_type, available_dates,
-    puja_process_id
+    puja_process_id, allow_quantity, max_quantity
   ) VALUES (
     $1, $2, $3, $4, $5, $6,
     $7, $8, $9, $10,
@@ -20,7 +20,7 @@ export const createService = `
     $18, $19, $20, $21, $22, $23,
     $24, $25, $26,
     $27, $28, $29, $30,
-    $31
+    $31, $32, $33
   )
   RETURNING *
 `;

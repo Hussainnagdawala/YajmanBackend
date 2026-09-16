@@ -1,5 +1,6 @@
 import { pool } from "../config/database";
-import { findCouponByCode, findServiceForCoupon, countUserCouponUsage } from "../queries/coupon.queries";
+import { findCouponByCode, findServiceForCoupon, countUserCouponUsage, findPaidServiceIds } from "../queries/coupon.queries";
+import { AppError } from "../utils/errors";
 
 export interface CouponRow {
   id: string;
@@ -14,7 +15,6 @@ export interface CouponRow {
   per_user_limit: number;
   valid_from: string;
   valid_until: string;
-  applicable_categories: string[] | null;
   applicable_services: string[] | null;
   is_active: boolean;
 }
@@ -27,11 +27,21 @@ export interface CouponValidationResult {
   coupon?: { id: string; code: string; title: string };
 }
 
+export const assertPaidServiceIds = async (serviceIds: string[]): Promise<void> => {
+  const unique = [...new Set(serviceIds)];
+  const result = await pool.query<{ id: string }>(findPaidServiceIds, [unique]);
+  if (result.rows.length !== unique.length) {
+    throw new AppError("VALIDATION_ERROR", "Coupons can only be applied to paid services", 400, [
+      { field: "applicable_services", message: "Select only services whose category requires payment" },
+    ]);
+  }
+};
+
 export const validateCoupon = async (
   code: string,
   userId: string,
   amount: number,
-  serviceId?: string
+  serviceId: string
 ): Promise<CouponValidationResult> => {
   const result = await pool.query<CouponRow>(findCouponByCode, [code.trim().toUpperCase()]);
   const coupon = result.rows[0];
@@ -57,28 +67,16 @@ export const validateCoupon = async (
     return { valid: false, message: `Minimum order amount of ${minOrderAmount} not met` };
   }
 
-  const hasServiceRestriction = coupon.applicable_services && coupon.applicable_services.length > 0;
-  const hasCategoryRestriction = coupon.applicable_categories && coupon.applicable_categories.length > 0;
+  const serviceResult = await pool.query<{ id: string; requires_payment: boolean }>(findServiceForCoupon, [serviceId]);
+  const service = serviceResult.rows[0];
+  if (!service) return { valid: false, message: "Service not found" };
+  if (!service.requires_payment) {
+    return { valid: false, message: "Coupons cannot be applied to this service" };
+  }
 
-  if (hasServiceRestriction || hasCategoryRestriction) {
-    if (!serviceId) return { valid: false, message: "Coupon is not applicable to this order" };
-
-    const serviceResult = await pool.query<{ id: string; category_id: string }>(findServiceForCoupon, [serviceId]);
-    const service = serviceResult.rows[0];
-    if (!service) return { valid: false, message: "Service not found" };
-
-    const serviceMatches = hasServiceRestriction && coupon.applicable_services!.includes(service.id);
-    const categoryMatches = hasCategoryRestriction && coupon.applicable_categories!.includes(service.category_id);
-
-    if (hasServiceRestriction && !hasCategoryRestriction && !serviceMatches) {
-      return { valid: false, message: "Coupon is not applicable to this service" };
-    }
-    if (hasCategoryRestriction && !hasServiceRestriction && !categoryMatches) {
-      return { valid: false, message: "Coupon is not applicable to this service's category" };
-    }
-    if (hasServiceRestriction && hasCategoryRestriction && !serviceMatches && !categoryMatches) {
-      return { valid: false, message: "Coupon is not applicable to this service" };
-    }
+  const assigned = coupon.applicable_services ?? [];
+  if (assigned.length === 0 || !assigned.includes(service.id)) {
+    return { valid: false, message: "Coupon is not applicable to this service" };
   }
 
   const discountValue = Number(coupon.discount_value);

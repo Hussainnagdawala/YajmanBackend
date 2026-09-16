@@ -3,7 +3,7 @@ const whereSql = (clauses: string[]): string => (clauses.length ? `WHERE ${claus
 export const exportOrdersAdmin = (whereClauses: string[], limitIdx: number) => `
   SELECT o.order_number, o.customer_name, o.customer_phone, o.customer_email,
     s.title AS service_title, o.booking_date, o.booking_time,
-    o.base_price, o.discount_amount, o.convenience_fee, o.total_amount,
+    o.quantity, o.unit_price, o.base_price, o.discount_amount, o.convenience_fee, o.total_amount,
     o.status, o.city, o.state, o.pincode, o.coupon_code, o.address,
     o.created_at,
     (
@@ -51,7 +51,8 @@ export const exportAssignmentsAdmin = (whereClauses: string[], limitIdx: number)
 
 export const exportServicesAdmin = (whereClauses: string[], orderBy: string, limitIdx: number) => `
   SELECT s.title, c.name AS category_name, s.price, s.original_price, s.status,
-    s.is_active, s.is_bestseller, s.is_featured, c.requires_pandit, c.requires_payment,
+    s.is_active, s.is_bestseller, s.is_featured, s.allow_quantity, s.max_quantity,
+    c.requires_pandit, c.requires_payment,
     s.duration_minutes, s.created_at
   FROM services s
   JOIN categories c ON c.id = s.category_id

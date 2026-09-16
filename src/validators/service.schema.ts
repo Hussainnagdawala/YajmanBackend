@@ -138,10 +138,19 @@ export const createServiceSchema = z.preprocess(
   temple_ids: jsonArrayDefaulted(z.string().uuid("Each temple must be a valid ID")),
   addon_ids: jsonArrayDefaulted(z.string().uuid("Each add-on must be a valid ID")),
   is_addon_available: strictBoolean.default(false),
+  allow_quantity: strictBoolean.default(false),
+  max_quantity: blankToUndefined(
+    z.coerce
+      .number({ invalid_type_error: "Maximum quantity must be a valid number" })
+      .int("Maximum quantity must be a whole number")
+      .min(1, "Maximum quantity must be at least 1")
+      .max(99, "Maximum quantity must be at most 99")
+      .default(10)
+  ),
   benefits: jsonArrayDefaulted(z.string().trim().min(1, "Benefit cannot be empty")),
   price: blankToUndefined(optionalPriceSchema),
   original_price: blankToUndefined(optionalOriginalPriceSchema),
-  short_description: z.string().trim().optional(),
+  short_description: z.string().trim().max(2000, "Short description must be at most 2000 characters").optional(),
   about_puja: z.string().trim().optional(),
   description: z.string().trim().optional(),
   custom_content: z.string().optional(),
@@ -175,6 +184,13 @@ export const createServiceSchema = z.preprocess(
     .superRefine((data, ctx) => {
       servicePricingRefine(data, ctx);
       serviceAvailabilityRefine(data, ctx, "create");
+      if (data.allow_quantity && (data.max_quantity ?? 10) < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["max_quantity"],
+          message: "Maximum quantity must be at least 2 when quantity is enabled",
+        });
+      }
     })
 );
 
@@ -193,10 +209,19 @@ export const updateServiceSchema = z.preprocess(
   temple_ids: jsonArrayOptional(z.string().uuid("Each temple must be a valid ID")),
   addon_ids: jsonArrayOptional(z.string().uuid("Each add-on must be a valid ID")),
   is_addon_available: strictBoolean.optional(),
+  allow_quantity: strictBoolean.optional(),
+  max_quantity: blankToUndefined(
+    z.coerce
+      .number({ invalid_type_error: "Maximum quantity must be a valid number" })
+      .int("Maximum quantity must be a whole number")
+      .min(1, "Maximum quantity must be at least 1")
+      .max(99, "Maximum quantity must be at most 99")
+      .optional()
+  ),
   benefits: jsonArrayOptional(z.string().trim().min(1, "Benefit cannot be empty")),
   price: blankToUndefined(optionalPriceSchema),
   original_price: blankToUndefined(optionalOriginalPriceSchema),
-  short_description: z.string().trim().optional(),
+  short_description: z.string().trim().max(2000, "Short description must be at most 2000 characters").optional(),
   about_puja: z.string().trim().optional(),
   description: z.string().trim().optional(),
   custom_content: z.string().optional(),
@@ -239,6 +264,13 @@ export const updateServiceSchema = z.preprocess(
     .superRefine((data, ctx) => {
       servicePricingRefine(data, ctx);
       serviceAvailabilityRefine(data, ctx, "update");
+      if (data.allow_quantity && data.max_quantity !== undefined && data.max_quantity < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["max_quantity"],
+          message: "Maximum quantity must be at least 2 when quantity is enabled",
+        });
+      }
     })
 );
 

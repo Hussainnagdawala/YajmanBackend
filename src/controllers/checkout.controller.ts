@@ -37,6 +37,7 @@ import {
   notifyRefundCompleted,
 } from "../services/order-notification.service";
 import { categoryRequiresBookingTime, resolveBookingTime, resolveStoredBookingTime } from "../utils/booking-time";
+import { resolveCheckoutQuantity, roundMoney, serviceLineTotal } from "../utils/service-quantity";
 
 interface PgError {
   code?: string;
@@ -94,7 +95,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
   try {
     const {
       service_id, booking_date, booking_time, customer_name, customer_phone, customer_whatsapp,
-      customer_calling_number, customer_email, members, addon_ids, gotra, gotra_unknown, coupon_code,
+      customer_calling_number, customer_email, members, quantity, addon_ids, gotra, gotra_unknown, coupon_code,
       address, city, pincode, special_instructions, birth_date, birth_time, birth_place, preferences,
     } = req.body;
     const userId = req.user!.id;
@@ -175,7 +176,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     }
     const addonTotal = selectedAddons.reduce((sum, a) => sum + a.price, 0);
 
-    const basePrice = Number(service.price);
+    const orderQuantity = resolveCheckoutQuantity(service, quantity);
+    const unitPrice = Number(service.price);
+    const basePrice = serviceLineTotal(unitPrice, orderQuantity);
     let discountAmount = 0;
     let couponId: string | null = null;
     let couponCode: string | null = null;
@@ -193,14 +196,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const settingResult = await pool.query<{ value: string }>(getAppSettingByKey, ["convenience_fee"]);
     const convenienceFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
     // Coupon discount applies to basePrice only — addons are added on top, undiscounted.
-    const totalAmount = Math.round((basePrice + addonTotal - discountAmount + convenienceFee) * 100) / 100;
+    const totalAmount = roundMoney(basePrice + addonTotal - discountAmount + convenienceFee);
 
     const order = await createOrderWithMembers(
       [
         userId, service_id, customer_name, customer_phone, customer_whatsapp ?? null,
         customer_calling_number ?? null, customer_email ?? null, gotra ?? null, gotra_unknown,
         booking_date, storedBookingTime, bookingDateTime, address ?? null, city ?? null, pincode ?? null,
-        basePrice, discountAmount, convenienceFee, totalAmount, couponId, couponCode,
+        orderQuantity, unitPrice, basePrice, discountAmount, convenienceFee, totalAmount, couponId, couponCode,
         birth_date ?? null, birth_time ?? null, birth_place ?? null, special_instructions ?? null,
         addonTotal, preferences ?? [],
       ],

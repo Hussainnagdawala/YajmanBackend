@@ -33,6 +33,8 @@ export interface InvoiceData {
   pandit: { display_name: string; phone?: string } | null;
   addons: { name: string; price: number }[];
   pricing: {
+    quantity?: number;
+    unit_price?: number;
     base_price: number;
     discount_amount: number;
     convenience_fee: number;

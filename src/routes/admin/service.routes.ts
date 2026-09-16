@@ -142,13 +142,15 @@ router.get("/:id", serviceController.getServiceAdmin);
  *                 items: { type: string, format: uuid }
  *                 default: []
  *               is_addon_available: { type: boolean, default: false }
+ *               allow_quantity: { type: boolean, default: false, description: 'When true, customers can book more than one of this service; price × quantity' }
+ *               max_quantity: { type: integer, minimum: 2, maximum: 99, default: 10, description: 'Required max when allow_quantity is true' }
  *               benefits:
  *                 type: array
  *                 items: { type: string }
  *                 default: []
  *               price: { type: number, minimum: 0, description: 'Required if the category requires payment' }
  *               original_price: { type: number, exclusiveMinimum: 0 }
- *               short_description: { type: string }
+ *               short_description: { type: string, maxLength: 2000 }
  *               about_puja: { type: string }
  *               description: { type: string }
  *               custom_content: { type: string, description: 'HTML, sanitized server-side' }
@@ -261,12 +263,14 @@ router.post("/", setUploadFolder, serviceUploads, validate(createServiceSchema),
  *                 type: array
  *                 items: { type: string, format: uuid }
  *               is_addon_available: { type: boolean }
+ *               allow_quantity: { type: boolean }
+ *               max_quantity: { type: integer, minimum: 1, maximum: 99 }
  *               benefits:
  *                 type: array
  *                 items: { type: string }
  *               price: { type: number, minimum: 0 }
  *               original_price: { type: number, exclusiveMinimum: 0 }
- *               short_description: { type: string }
+ *               short_description: { type: string, maxLength: 2000 }
  *               about_puja: { type: string }
  *               description: { type: string }
  *               custom_content: { type: string, description: 'HTML, sanitized server-side' }

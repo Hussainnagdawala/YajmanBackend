@@ -4,6 +4,7 @@ import { phoneSchema, countryCodeSchema } from "./common.schema";
 export const sendOtpSchema = z.object({
   phone: phoneSchema,
   country_code: countryCodeSchema.optional(),
+  audience: z.enum(["admin"]).optional(),
 });
 
 export const verifyOtpSchema = z.object({

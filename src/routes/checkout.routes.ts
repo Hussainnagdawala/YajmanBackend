@@ -62,6 +62,12 @@ router.post("/webhook", checkoutController.razorpayWebhook);
  *             required: [service_id, booking_date, customer_name, customer_phone, members]
  *             properties:
  *               service_id: { type: string, format: uuid }
+ *               quantity:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 99
+ *                 default: 1
+ *                 description: Service quantity. Rejected unless the service has allow_quantity true. Multiplies unit price only; add-ons stay per booking.
  *               booking_date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', example: '2026-08-15' }
  *               booking_time:
  *                 type: string

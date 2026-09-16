@@ -196,6 +196,7 @@ export const renderInvoicePdf = (data: InvoiceData): Promise<Buffer> =>
       `Date: ${formatDate(data.order.booking_date)}`,
       ...(data.requires_booking_time ? [`Time: ${formatTime(data.order.booking_time)}`] : []),
       ...(data.members.length ? [`Members: ${data.members.join(", ")}`] : []),
+      ...((data.pricing.quantity ?? 1) > 1 ? [`Quantity: ${data.pricing.quantity}`] : []),
       ...(data.pandit?.display_name ? [`Pandit: ${data.pandit.display_name}`] : []),
     ];
 
@@ -220,8 +221,11 @@ export const renderInvoicePdf = (data: InvoiceData): Promise<Buffer> =>
     doc.text("INVOICE DETAILS", L, y, { width: W });
     y += 12;
 
+    const qty = data.pricing.quantity ?? 1;
+    const unitPrice =
+      data.pricing.unit_price ?? (qty > 0 ? data.pricing.base_price / qty : data.pricing.base_price);
     const rows = [
-      { d: data.service_title, q: "1", r: formatInr(data.pricing.base_price), a: formatInr(data.pricing.base_price) },
+      { d: data.service_title, q: String(qty), r: formatInr(unitPrice), a: formatInr(data.pricing.base_price) },
       ...data.addons.map((a) => ({ d: `Add-on: ${a.name}`, q: "1", r: formatInr(a.price), a: formatInr(a.price) })),
       ...(data.pricing.convenience_fee > 0
         ? [{ d: "Convenience Fee", q: "1", r: formatInr(data.pricing.convenience_fee), a: formatInr(data.pricing.convenience_fee) }]

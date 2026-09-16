@@ -11,8 +11,22 @@ import { AuthUser } from "../types/models";
 
 export const sendOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { phone, country_code = "+91" } = req.body;
-    const result = await sendOtpService(phone, country_code);
+    const { phone, country_code = "+91", audience } = req.body;
+
+    if (audience === "admin") {
+      const existing = await pool.query(findUserByPhone, [phone]);
+      const user = existing.rows[0] as { role?: string; status?: string } | undefined;
+      if (!user || user.role !== "admin" || user.status !== "active") {
+        throw new AppError(
+          "FORBIDDEN",
+          "This phone number is not registered for the admin portal",
+          403,
+          [{ field: "phone", message: "Use an active admin account number" }]
+        );
+      }
+    }
+
+    const result = await sendOtpService(phone, country_code, { audience });
     return success(res, result, "OTP sent");
   } catch (err) {
     next(err);
@@ -28,7 +42,16 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
     let user = existing.rows[0];
     const isNewUser = !user;
 
-    if (isNewUser) {
+    if (device_source === "portal") {
+      if (!user || user.role !== "admin" || user.status !== "active") {
+        throw new AppError(
+          "FORBIDDEN",
+          "This phone number is not registered for the admin portal",
+          403
+        );
+      }
+      await pool.query(updateLastLogin, [user.id]);
+    } else if (isNewUser) {
       const created = await pool.query(createUser, [phone, country_code, "customer", device_source]);
       user = created.rows[0];
     } else {

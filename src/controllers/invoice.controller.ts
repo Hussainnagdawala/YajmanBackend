@@ -77,6 +77,8 @@ export const getBookingInvoice = async (req: Request, res: Response, next: NextF
         price: Number(a.price),
       })),
       pricing: {
+        quantity: Number(order.quantity ?? 1),
+        unit_price: Number(order.unit_price ?? order.base_price),
         base_price: Number(order.base_price),
         discount_amount: Number(order.discount_amount),
         convenience_fee: Number(order.convenience_fee),

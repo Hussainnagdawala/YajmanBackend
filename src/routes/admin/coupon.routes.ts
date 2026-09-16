@@ -18,7 +18,7 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [code, title, discount_type, discount_value, valid_from, valid_until]
+ *             required: [code, title, discount_type, discount_value, valid_from, valid_until, applicable_services]
  *             properties:
  *               code: { type: string, minLength: 3, maxLength: 30, description: Stored uppercased }
  *               title: { type: string, maxLength: 150 }
@@ -31,12 +31,11 @@ const router = Router();
  *               per_user_limit: { type: integer, minimum: 1, default: 1 }
  *               valid_from: { type: string, format: date-time }
  *               valid_until: { type: string, format: date-time, description: Must be after valid_from }
- *               applicable_categories:
- *                 type: array
- *                 items: { type: string, format: uuid }
  *               applicable_services:
  *                 type: array
+ *                 minItems: 1
  *                 items: { type: string, format: uuid }
+ *                 description: Paid services only. At least one is required.
  *     responses:
  *       201:
  *         description: Coupon created
@@ -121,11 +120,9 @@ router.get("/", couponController.listCouponsAdmin);
  *               per_user_limit: { type: integer, minimum: 1 }
  *               valid_from: { type: string, format: date-time }
  *               valid_until: { type: string, format: date-time }
- *               applicable_categories:
- *                 type: array
- *                 items: { type: string, format: uuid }
  *               applicable_services:
  *                 type: array
+ *                 minItems: 1
  *                 items: { type: string, format: uuid }
  *               is_active: { type: boolean }
  *     responses:

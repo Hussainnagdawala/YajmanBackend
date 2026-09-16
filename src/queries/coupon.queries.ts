@@ -6,12 +6,27 @@ export const listActiveCoupons = `
     id, code, title, description, discount_type, discount_value,
     max_discount_amount, min_order_amount, usage_limit, usage_count,
     per_user_limit, valid_from, valid_until,
-    applicable_categories, applicable_services
+    applicable_services
   FROM coupons
   WHERE is_active = true
     AND valid_from <= NOW()
     AND valid_until >= NOW()
     AND (usage_limit IS NULL OR usage_count < usage_limit)
+  ORDER BY valid_until ASC, created_at DESC
+`;
+
+export const listActiveCouponsForService = `
+  SELECT
+    id, code, title, description, discount_type, discount_value,
+    max_discount_amount, min_order_amount, usage_limit, usage_count,
+    per_user_limit, valid_from, valid_until,
+    applicable_services
+  FROM coupons
+  WHERE is_active = true
+    AND valid_from <= NOW()
+    AND valid_until >= NOW()
+    AND (usage_limit IS NULL OR usage_count < usage_limit)
+    AND $1::uuid = ANY(applicable_services)
   ORDER BY valid_until ASC, created_at DESC
 `;
 
@@ -24,7 +39,7 @@ export const createCoupon = `
     code, title, description, discount_type, discount_value, max_discount_amount,
     min_order_amount, usage_limit, per_user_limit, valid_from, valid_until,
     applicable_categories, applicable_services, created_by
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12, $13)
   RETURNING *
 `;
 
@@ -41,7 +56,19 @@ export const hardDeleteCoupon = `DELETE FROM coupons WHERE id = $1 RETURNING *`;
 export const countCouponUsagesByCoupon = `SELECT COUNT(*)::int AS count FROM coupon_usages WHERE coupon_id = $1`;
 export const countOrdersByCoupon = `SELECT COUNT(*)::int AS count FROM orders WHERE coupon_id = $1`;
 
-export const findServiceForCoupon = `SELECT id, category_id FROM services WHERE id = $1`;
+export const findServiceForCoupon = `
+  SELECT s.id, s.category_id, c.requires_payment
+  FROM services s
+  JOIN categories c ON c.id = s.category_id
+  WHERE s.id = $1
+`;
+
+export const findPaidServiceIds = `
+  SELECT s.id
+  FROM services s
+  JOIN categories c ON c.id = s.category_id
+  WHERE s.id = ANY($1::uuid[]) AND c.requires_payment = true
+`;
 
 export const countUserCouponUsage = `
   SELECT COUNT(*)::int AS count FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2

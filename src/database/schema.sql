@@ -266,6 +266,9 @@ CREATE TABLE services (
     is_featured BOOLEAN DEFAULT FALSE,
     is_bestseller BOOLEAN DEFAULT FALSE,
     is_addon_available BOOLEAN NOT NULL DEFAULT FALSE,
+    allow_quantity BOOLEAN NOT NULL DEFAULT FALSE,
+    max_quantity INT NOT NULL DEFAULT 10
+        CHECK (max_quantity >= 1 AND max_quantity <= 99),
 
     -- Puja process template (optional)
     puja_process_id UUID REFERENCES puja_processes(id) ON DELETE SET NULL,
@@ -813,7 +816,10 @@ CREATE TABLE orders (
     latitude DECIMAL(10,7),
     longitude DECIMAL(10,7),
 
-    -- Pricing
+    -- Pricing (quantity snapshots the count at checkout; unit_price is catalog
+    -- price at booking; base_price = unit_price × quantity)
+    quantity INT NOT NULL DEFAULT 1 CHECK (quantity >= 1 AND quantity <= 99),
+    unit_price DECIMAL(10,2) NOT NULL,
     base_price DECIMAL(10,2) NOT NULL,
     discount_amount DECIMAL(10,2) DEFAULT 0,
     addon_total DECIMAL(10,2) NOT NULL DEFAULT 0,

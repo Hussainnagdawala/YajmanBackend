@@ -2,10 +2,12 @@ import { Request, Response, NextFunction } from "express";
 import { pool } from "../config/database";
 import { success } from "../utils/response";
 import { AppError } from "../utils/errors";
-import { validateCoupon } from "../services/coupon.service";
+import { assertPaidServiceIds, validateCoupon } from "../services/coupon.service";
 import {
   listAllCoupons,
   listActiveCoupons,
+  listActiveCouponsForService,
+  findServiceForCoupon,
   createCoupon as createCouponQuery,
   updateCoupon as updateCouponQuery,
   softDeleteCoupon,
@@ -13,6 +15,8 @@ import {
   countCouponUsagesByCoupon,
   countOrdersByCoupon,
 } from "../queries/coupon.queries";
+import { findActiveServiceById } from "../queries/service.queries";
+import { resolveCheckoutQuantity, serviceLineTotal } from "../utils/service-quantity";
 
 export const listCouponsAdmin = async (_req: Request, res: Response, next: NextFunction) => {
   try {
@@ -23,9 +27,18 @@ export const listCouponsAdmin = async (_req: Request, res: Response, next: NextF
   }
 };
 
-/** App-facing: active + currently valid coupons only. */
-export const listCoupons = async (_req: Request, res: Response, next: NextFunction) => {
+/** App-facing: active + currently valid coupons only. Pass service_id to filter to that paid service. */
+export const listCoupons = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const serviceId = (req.query as { service_id?: string }).service_id;
+    if (serviceId) {
+      const serviceResult = await pool.query<{ requires_payment: boolean }>(findServiceForCoupon, [serviceId]);
+      if (!serviceResult.rows[0]?.requires_payment) {
+        return success(res, []);
+      }
+      const result = await pool.query(listActiveCouponsForService, [serviceId]);
+      return success(res, result.rows);
+    }
     const result = await pool.query(listActiveCoupons);
     return success(res, result.rows);
   } catch (err) {
@@ -38,13 +51,15 @@ export const createCoupon = async (req: Request, res: Response, next: NextFuncti
     const {
       code, title, description, discount_type, discount_value, max_discount_amount,
       min_order_amount, usage_limit, per_user_limit, valid_from, valid_until,
-      applicable_categories, applicable_services,
+      applicable_services,
     } = req.body;
+
+    await assertPaidServiceIds(applicable_services);
 
     const result = await pool.query(createCouponQuery, [
       code, title, description ?? null, discount_type, discount_value, max_discount_amount ?? null,
       min_order_amount, usage_limit ?? null, per_user_limit, valid_from, valid_until,
-      applicable_categories ?? null, applicable_services ?? null, req.user!.id,
+      applicable_services, req.user!.id,
     ]);
     return success(res, result.rows[0], "Coupon created", 201);
   } catch (err) {
@@ -56,6 +71,10 @@ export const updateCoupon = async (req: Request, res: Response, next: NextFuncti
   try {
     const fields = Object.keys(req.body);
     if (fields.length === 0) throw new AppError("VALIDATION_ERROR", "No fields to update", 400);
+
+    if (Array.isArray(req.body.applicable_services)) {
+      await assertPaidServiceIds(req.body.applicable_services);
+    }
 
     const values = fields.map((f) => req.body[f]);
     const result = await pool.query(updateCouponQuery(fields), [req.params.id, ...values]);
@@ -95,7 +114,15 @@ export const deleteCouponPermanently = async (req: Request, res: Response, next:
 
 export const validateCouponHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { code, service_id, amount } = req.body;
+    const { code, service_id, quantity } = req.body;
+    const serviceResult = await pool.query(findActiveServiceById, [service_id]);
+    const service = serviceResult.rows[0];
+    if (!service) throw new AppError("NOT_FOUND", "Service not found or not available for booking", 404);
+    if (!service.requires_payment) {
+      throw new AppError("VALIDATION_ERROR", "Coupons cannot be applied to this service", 400);
+    }
+    const qty = resolveCheckoutQuantity(service, quantity);
+    const amount = serviceLineTotal(Number(service.price), qty);
     const result = await validateCoupon(code, req.user!.id, amount, service_id);
     return success(res, result);
   } catch (err) {

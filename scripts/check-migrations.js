@@ -114,6 +114,16 @@ const MIGRATIONS = [
     checkSql:
       "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name='reminder_24h_sent_at')",
   },
+  {
+    file: "022_contact_inquiry_birth_details.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='contact_form_entries' AND column_name='birth_date')",
+  },
+  {
+    file: "023_coupon_paid_services_only.sql",
+    checkSql:
+      "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_description d JOIN pg_catalog.pg_class c ON c.oid = d.objoid JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = d.objsubid WHERE c.relname = 'coupons' AND a.attname = 'applicable_services' AND d.description = 'paid-services-only')",
+  },
 ];
 
 const buildClientConfig = () => {

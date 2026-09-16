@@ -397,7 +397,8 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     }
 
     const {
-      title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, benefits, price, original_price,
+      title, category_id, type_ids, tag_ids, temple_ids, addon_ids, is_addon_available, allow_quantity, max_quantity,
+      benefits, price, original_price,
       short_description, about_puja, description, custom_content,
       pincode, latitude, longitude, video_url,
       duration_minutes, advance_booking_days, is_featured, is_bestseller,
@@ -423,6 +424,8 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     }
     const finalPrice = requires_payment ? price : null;
     const finalIsAddonAvailable = requires_pandit ? is_addon_available : false;
+    const finalAllowQuantity = requires_payment ? Boolean(allow_quantity) : false;
+    const finalMaxQuantity = finalAllowQuantity ? (max_quantity ?? 10) : 10;
     // Availability/booking windows, temple info, key features, FAQs, types, benefits
     // and "about this puja" only make sense for bookable (priced) services — an
     // enquiry-only category (no price) has no checkout flow for any of this to
@@ -451,7 +454,7 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       is_featured, is_bestseller, display_order, meta_title ?? null, meta_description ?? null, req.user!.id,
       finalIsAddonAvailable, finalBenefits, finalKeyFeatures,
       finalAvailabilityStartDate, finalAvailabilityEndDate, finalBookingAvailabilityType, finalAvailableDates,
-      puja_process_id ?? null,
+      puja_process_id ?? null, finalAllowQuantity, finalMaxQuantity,
     ]);
     const service = result.rows[0];
 
@@ -554,9 +557,26 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
       setField("key_features", []);
       setField("benefits", []);
       setField("about_puja", null);
+      setField("allow_quantity", false);
+      setField("max_quantity", 10);
     }
     if (!requires_pandit) {
       setField("is_addon_available", false);
+    }
+
+    if (requires_payment) {
+      const effectiveAllowQuantity =
+        rest.allow_quantity !== undefined ? Boolean(rest.allow_quantity) : Boolean(existing.rows[0].allow_quantity);
+      const effectiveMaxQuantity =
+        rest.max_quantity !== undefined ? Number(rest.max_quantity) : Number(existing.rows[0].max_quantity ?? 10);
+      if (effectiveAllowQuantity && effectiveMaxQuantity < 2) {
+        throw new AppError("VALIDATION_ERROR", "Maximum quantity must be at least 2 when quantity is enabled", 400, [
+          { field: "max_quantity", message: "Maximum quantity must be at least 2 when quantity is enabled" },
+        ]);
+      }
+      if (!effectiveAllowQuantity && rest.max_quantity === undefined) {
+        setField("max_quantity", existing.rows[0].max_quantity ?? 10);
+      }
     }
 
     const effectiveTypeIds = requires_payment ? type_ids : [];

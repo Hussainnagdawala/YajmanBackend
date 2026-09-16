@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as couponController from "../controllers/coupon.controller";
 import { validate } from "../middleware/validate";
-import { validateCouponSchema } from "../validators/coupon.schema";
+import { validateCouponSchema, listCouponsQuerySchema } from "../validators/coupon.schema";
 
 const router = Router();
 
@@ -10,8 +10,13 @@ const router = Router();
  * /coupons:
  *   get:
  *     tags: [Coupons]
- *     summary: List active, currently-valid coupons
+ *     summary: List active, currently-valid coupons (optionally filtered to a paid service)
  *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: service_id
+ *         schema: { type: string, format: uuid }
+ *         description: When set, only coupons assigned to this paid service are returned
  *     responses:
  *       200:
  *         description: Coupons fetched
@@ -28,7 +33,7 @@ const router = Router();
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
-router.get("/", couponController.listCoupons);
+router.get("/", validate(listCouponsQuerySchema, "query"), couponController.listCoupons);
 
 /**
  * @openapi
@@ -43,11 +48,12 @@ router.get("/", couponController.listCoupons);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [code, amount]
+ *             required: [code, service_id]
  *             properties:
  *               code: { type: string }
  *               service_id: { type: string, format: uuid }
- *               amount: { type: number, exclusiveMinimum: 0 }
+ *               quantity: { type: integer, minimum: 1, maximum: 99, default: 1, description: 'Used with catalog unit price to compute the service line amount for min-order and discount' }
+ *               amount: { type: number, exclusiveMinimum: 0, description: 'Ignored — amount is computed from service price × quantity' }
  *     responses:
  *       200:
  *         description: Coupon validation result

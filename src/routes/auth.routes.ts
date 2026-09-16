@@ -28,6 +28,10 @@ const router = Router();
  *               country_code:
  *                 type: string
  *                 example: '+91'
+ *               audience:
+ *                 type: string
+ *                 enum: [admin]
+ *                 description: Send only when the number belongs to an active admin. Required for the admin portal.
  *     responses:
  *       200:
  *         description: OTP sent

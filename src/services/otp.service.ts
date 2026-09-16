@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { pool } from "../config/database";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
@@ -7,6 +8,20 @@ import { generateOtp } from "../utils/crypto";
 const MAX_ATTEMPTS = 5;
 const MAX_ATTEMPTS_PER_HOUR = 10;
 const PURPOSE_LOGIN = "login";
+
+/**
+ * Admin portal login bypass.
+ * Active: admin OTP is always 123456 (no SMS/WhatsApp).
+ * To use real OTP delivery, comment out the next line.
+ */
+const STATIC_ADMIN_OTP = "123456";
+// const STATIC_ADMIN_OTP = "";
+
+const maskPhone = (countryCode: string, phone: string): string => {
+  const digits = `${countryCode.replace("+", "")}${phone}`;
+  if (digits.length < 4) return "****";
+  return `${digits.slice(0, 2)}******${digits.slice(-4)}`;
+};
 
 const sendViaWhatsApp = async (phone: string, countryCode: string, otp: string): Promise<void> => {
   const to = `${countryCode.replace("+", "")}${phone}`;
@@ -50,44 +65,90 @@ const sendViaWhatsApp = async (phone: string, countryCode: string, otp: string):
   }
 };
 
-const sendViaNxc = async (phone: string, countryCode: string, otp: string): Promise<void> => {
-  const form = new FormData();
-  form.append("appkey", env.NXC_APP_KEY);
-  form.append("authkey", env.NXC_AUTH_KEY);
-  form.append("to", `${countryCode.replace("+", "")}${phone}`);
-  form.append("template_id", env.NXC_OTP_TEMPLATE_ID);
-  form.append("language", env.NXC_OTP_LANG);
-  form.append("variables[{variableKey1}]", otp);
-  // dynamic URL button (copy-code autofill) has its own placeholder,
-  // numbered sequentially after the body variable — needs the same OTP again
+const sendViaNxc = async (
+  phone: string,
+  countryCode: string,
+  otp: string,
+  requestId: string
+): Promise<void> => {
+  const to = `${countryCode.replace("+", "")}${phone}`;
+  const masked = maskPhone(countryCode, phone);
+
+  // NXC support Postman: POST /api/create-message-json (JSON, not multipart).
+  // to is an array. OTP Copy-code uses buttons.b1_type=url + b1_value=otp.
+  const language = env.NXC_OTP_LANG.trim();
+  const payload: Record<string, unknown> = {
+    appkey: env.NXC_APP_KEY,
+    authkey: env.NXC_AUTH_KEY,
+    to: [to],
+    template_id: env.NXC_OTP_TEMPLATE_ID,
+    language,
+    variables: { variableKey1: otp },
+  };
   if (env.NXC_OTP_HAS_BUTTON) {
-    form.append("variables[{variableKey2}]", otp);
+    payload.buttons = {
+      b1_type: "url",
+      b1_value: otp,
+    };
   }
 
-  const res = await fetch(env.NXC_API_URL, { method: "POST", body: form });
+  logger.info("OTP provider request", {
+    requestId,
+    requestedMobile: masked,
+    smsRecipient: masked,
+    templateId: env.NXC_OTP_TEMPLATE_ID,
+    language,
+    hasButton: env.NXC_OTP_HAS_BUTTON,
+    contentType: "application/json",
+  });
+
+  const res = await fetch(env.NXC_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   const body = await res.text();
 
   if (!res.ok) {
-    logger.error("NXC OTP send failed", { status: res.status, body });
+    logger.error("NXC OTP send failed", { requestId, status: res.status, body });
     throw new AppError("OTP_SEND_FAILED", "Failed to send OTP", 502);
   }
 
-  logger.info("NXC OTP send response", { status: res.status, body });
+  try {
+    const parsed = JSON.parse(body) as { data?: { to?: string | string[]; id?: string } };
+    const rawTo = parsed.data?.to;
+    const providerTo = (Array.isArray(rawTo) ? rawTo[0] : rawTo)?.replace(/^\+/, "");
+    logger.info("OTP provider accepted (queued, not delivery confirmation)", {
+      requestId,
+      requestedMobile: masked,
+      smsRecipient: providerTo ? maskPhone("", providerTo) : masked,
+      recipientMatch: !providerTo || providerTo === to,
+      providerMessageId: parsed.data?.id,
+      templateId: env.NXC_OTP_TEMPLATE_ID,
+    });
+  } catch {
+    logger.info("NXC OTP send response", { requestId, status: res.status, body });
+  }
 };
 
-const sendViaProvider = async (phone: string, countryCode: string, otp: string): Promise<void> => {
+const sendViaProvider = async (
+  phone: string,
+  countryCode: string,
+  otp: string,
+  requestId: string
+): Promise<void> => {
   if (env.OTP_PROVIDER === "nxc") {
     if (!env.NXC_APP_KEY || !env.NXC_AUTH_KEY) {
-      logger.debug(`[OTP:nxc:dev] ${countryCode}${phone} -> ${otp}`);
+      logger.debug(`[OTP:nxc:dev] ${maskPhone(countryCode, phone)}`);
       return;
     }
-    await sendViaNxc(phone, countryCode, otp);
+    await sendViaNxc(phone, countryCode, otp, requestId);
     return;
   }
 
   if (env.OTP_PROVIDER === "whatsapp") {
     if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
-      logger.debug(`[OTP:whatsapp:dev] ${countryCode}${phone} -> ${otp}`);
+      logger.debug(`[OTP:whatsapp:dev] ${maskPhone(countryCode, phone)}`);
       return;
     }
     await sendViaWhatsApp(phone, countryCode, otp);
@@ -95,7 +156,7 @@ const sendViaProvider = async (phone: string, countryCode: string, otp: string):
   }
 
   if (env.NODE_ENV !== "production" || !env.OTP_API_KEY) {
-    logger.debug(`[OTP] ${countryCode}${phone} -> ${otp}`);
+    logger.debug(`[OTP] ${maskPhone(countryCode, phone)}`);
     return;
   }
 
@@ -111,26 +172,40 @@ const sendViaProvider = async (phone: string, countryCode: string, otp: string):
       }),
     });
     if (!res.ok) {
-      logger.error("OTP provider send failed", { status: res.status });
+      logger.error("OTP provider send failed", { requestId, status: res.status });
       throw new AppError("OTP_SEND_FAILED", "Failed to send OTP", 502);
     }
   }
 };
 
-export const sendOtp = async (phone: string, countryCode: string): Promise<{ expires_in: number }> => {
-  // TEMP: WhatsApp/NXC send disabled, fixed OTP for testing. Revert to
-  // generateOtp(6) + sendViaProvider(...) once re-enabled.
-  const otp = "123456";
+export const sendOtp = async (
+  phone: string,
+  countryCode: string,
+  options?: { audience?: "admin" }
+): Promise<{ expires_in: number }> => {
+  const requestId = crypto.randomUUID();
+  const useStaticAdminOtp = Boolean(STATIC_ADMIN_OTP) && options?.audience === "admin";
+  const otp = useStaticAdminOtp ? STATIC_ADMIN_OTP : generateOtp(6);
   const expiresAt = new Date(Date.now() + env.OTP_EXPIRY_MINUTES * 60 * 1000);
+
+  logger.info("OTP request", {
+    requestId,
+    requestedMobile: maskPhone(countryCode, phone),
+    audience: options?.audience ?? "customer",
+    staticAdminOtp: useStaticAdminOtp,
+  });
+
+  if (!useStaticAdminOtp) {
+    await sendViaProvider(phone, countryCode, otp, requestId);
+  } else {
+    logger.debug(`[OTP:admin:static] ${maskPhone(countryCode, phone)}`);
+  }
 
   await pool.query(
     `INSERT INTO otp_verifications (phone, country_code, otp_code, purpose, expires_at)
      VALUES ($1, $2, $3, $4, $5)`,
     [phone, countryCode, otp, PURPOSE_LOGIN, expiresAt]
   );
-
-  // await sendViaProvider(phone, countryCode, otp);
-  logger.debug(`[OTP:disabled] ${countryCode}${phone} -> ${otp}`);
 
   return { expires_in: env.OTP_EXPIRY_MINUTES * 60 };
 };
@@ -167,4 +242,3 @@ export const verifyOtp = async (phone: string, otp: string): Promise<void> => {
 
   await pool.query(`UPDATE otp_verifications SET is_verified = true WHERE id = $1`, [record.id]);
 };
- 
