@@ -8,7 +8,10 @@ import {
   findActiveLegalPageBySlug,
   listAllLegalPagesAdmin,
   findLegalPageByIdAdmin,
+  createLegalPage as createLegalPageQuery,
   updateLegalPage as updateLegalPageQuery,
+  softDeleteLegalPage,
+  hardDeleteLegalPage,
 } from "../queries/legal.queries";
 import { generateUniqueSlug } from "../services/slug.service";
 
@@ -54,6 +57,26 @@ export const getLegalPageAdmin = async (req: Request, res: Response, next: NextF
   }
 };
 
+export const createLegalPageAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { title, content, meta_title, meta_description, is_active } = req.body;
+    const slug = await generateUniqueSlug(title, "legal_pages");
+
+    const result = await pool.query(createLegalPageQuery, [
+      slug,
+      title,
+      content ? DOMPurify.sanitize(content) : "",
+      meta_title ?? null,
+      meta_description ?? null,
+      is_active,
+      req.user!.id,
+    ]);
+    return success(res, result.rows[0], "Page created", 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const updateLegalPageAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { title, content, meta_title, meta_description, is_active } = req.body;
@@ -80,6 +103,26 @@ export const updateLegalPageAdmin = async (req: Request, res: Response, next: Ne
     if (!result.rows[0]) throw new AppError("NOT_FOUND", "Page not found", 404);
 
     return success(res, result.rows[0], "Page updated");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteLegalPageAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(softDeleteLegalPage, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Page not found", 404);
+    return success(res, result.rows[0], "Page deleted");
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const deleteLegalPagePermanently = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await pool.query(hardDeleteLegalPage, [req.params.id]);
+    if (!result.rows[0]) throw new AppError("NOT_FOUND", "Page not found", 404);
+    return success(res, result.rows[0], "Page permanently deleted");
   } catch (err) {
     next(err);
   }

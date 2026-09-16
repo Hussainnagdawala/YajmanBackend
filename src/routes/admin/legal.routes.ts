@@ -1,9 +1,44 @@
 import { Router } from "express";
 import * as legalController from "../../controllers/legal.controller";
 import { validate } from "../../middleware/validate";
-import { updateLegalPageSchema } from "../../validators/legal.schema";
+import { createLegalPageSchema, updateLegalPageSchema } from "../../validators/legal.schema";
 
 const router = Router();
+
+/**
+ * @openapi
+ * /admin/legal-pages:
+ *   post:
+ *     tags: [Admin: Legal Pages]
+ *     summary: Create a new legal page
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title]
+ *             properties:
+ *               title: { type: string, maxLength: 200 }
+ *               content: { type: string, description: 'Rich-text HTML from the admin editor (sanitized server-side)' }
+ *               meta_title: { type: string, maxLength: 200, nullable: true }
+ *               meta_description: { type: string, nullable: true }
+ *               is_active: { type: boolean, default: true }
+ *     responses:
+ *       201:
+ *         description: Legal page created
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.post("/", validate(createLegalPageSchema), legalController.createLegalPageAdmin);
 
 /**
  * @openapi
@@ -96,5 +131,59 @@ router.get("/:id", legalController.getLegalPageAdmin);
  *         $ref: '#/components/responses/NotFound'
  */
 router.patch("/:id", validate(updateLegalPageSchema), legalController.updateLegalPageAdmin);
+
+/**
+ * @openapi
+ * /admin/legal-pages/{id}:
+ *   delete:
+ *     tags: [Admin: Legal Pages]
+ *     summary: Soft-delete a legal page (sets is_active false)
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Legal page deleted
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.delete("/:id", legalController.deleteLegalPageAdmin);
+
+/**
+ * @openapi
+ * /admin/legal-pages/{id}/permanent:
+ *   delete:
+ *     tags: [Admin: Legal Pages]
+ *     summary: Permanently delete a legal page
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Legal page permanently deleted
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessEnvelope' }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.delete("/:id/permanent", legalController.deleteLegalPagePermanently);
 
 export default router;

@@ -1,6 +1,7 @@
 // ─── Legal pages (Terms, Privacy, Cookies, Disclaimer, Return Policy) ──────
-// Fixed catalog — rows are seeded by migration, admin only ever updates them.
-// Slug regenerates from title on update (see legal.controller.ts).
+// The five rows above are seeded by migration 020, but admin can also add and
+// remove pages beyond those (open catalog). Slug regenerates from title on
+// both create and update (see legal.controller.ts).
 
 export const listActiveLegalPages = `
   SELECT slug, title, meta_title, meta_description, updated_at
@@ -37,3 +38,15 @@ export const updateLegalPage = (fields: string[]) => `
   WHERE id = $1
   RETURNING *
 `;
+
+export const createLegalPage = `
+  INSERT INTO legal_pages (slug, title, content, meta_title, meta_description, is_active, updated_by)
+  VALUES ($1, $2, $3, $4, $5, $6, $7)
+  RETURNING *
+`;
+
+export const softDeleteLegalPage = `
+  UPDATE legal_pages SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *
+`;
+
+export const hardDeleteLegalPage = `DELETE FROM legal_pages WHERE id = $1 RETURNING *`;
