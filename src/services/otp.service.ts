@@ -23,47 +23,6 @@ const maskPhone = (countryCode: string, phone: string): string => {
   return `${digits.slice(0, 2)}******${digits.slice(-4)}`;
 };
 
-const sendViaWhatsApp = async (phone: string, countryCode: string, otp: string): Promise<void> => {
-  const to = `${countryCode.replace("+", "")}${phone}`;
-  const url = `https://graph.facebook.com/${env.WHATSAPP_GRAPH_VERSION}/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-
-  const components: unknown[] = [
-    { type: "body", parameters: [{ type: "text", text: otp }] },
-  ];
-  if (env.WHATSAPP_OTP_HAS_BUTTON) {
-    components.push({
-      type: "button",
-      sub_type: "url",
-      index: "0",
-      parameters: [{ type: "text", text: otp }],
-    });
-  }
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      recipient_type: "individual",
-      to,
-      type: "template",
-      template: {
-        name: env.WHATSAPP_OTP_TEMPLATE,
-        language: { code: env.WHATSAPP_OTP_LANG },
-        components,
-      },
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    logger.error("WhatsApp OTP send failed", { status: res.status, body });
-    throw new AppError("OTP_SEND_FAILED", "Failed to send OTP", 502);
-  }
-};
 
 const sendViaNxc = async (
   phone: string,
@@ -146,14 +105,6 @@ const sendViaProvider = async (
     return;
   }
 
-  if (env.OTP_PROVIDER === "whatsapp") {
-    if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
-      logger.debug(`[OTP:whatsapp:dev] ${maskPhone(countryCode, phone)}`);
-      return;
-    }
-    await sendViaWhatsApp(phone, countryCode, otp);
-    return;
-  }
 
   if (env.NODE_ENV !== "production" || !env.OTP_API_KEY) {
     logger.debug(`[OTP] ${maskPhone(countryCode, phone)}`);
