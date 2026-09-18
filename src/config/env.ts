@@ -72,7 +72,10 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default("*"),
 
   RATE_LIMIT_WINDOW_MS: z.string().default("900000").transform(Number),
-  RATE_LIMIT_MAX_REQUESTS: z.string().default("100").transform(Number),
+  // Public pages fire many parallel GETs (banners, placements, catalog). 100/15min
+  // per IP is too low for a marketing site — one home load plus a few navigations
+  // returns 429 "Too many requests".
+  RATE_LIMIT_MAX_REQUESTS: z.string().default("1000").transform(Number),
 
   // Firebase / FCM — optional in local/dev; push no-ops when unset
   FIREBASE_PROJECT_ID: z.string().optional().default(""),

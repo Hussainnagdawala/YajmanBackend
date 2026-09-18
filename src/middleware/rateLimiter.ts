@@ -9,6 +9,7 @@ export const globalRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => {
+    if (env.NODE_ENV === "development") return true;
     const path = req.originalUrl.split("?")[0];
     // Admin portal is authenticated and issues many list/upload calls from one IP.
     if (path.startsWith(adminApiPrefix)) return true;
