@@ -42,18 +42,25 @@ const jsonPreprocess = (val: unknown) => {
 };
 const uuidArrayDefaulted = () => z.preprocess(jsonPreprocess, z.array(z.string().uuid()).default([]));
 const uuidArrayOptional = () => z.preprocess(jsonPreprocess, z.array(z.string().uuid()).optional());
+const urlArrayOptional = () => z.preprocess(jsonPreprocess, z.array(z.string()).optional());
+
+const blankToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((val) => (val === "" ? undefined : val), schema);
+
+const optionalUuid = blankToUndefined(z.string().uuid().optional());
+const optionalPublishedAt = blankToUndefined(z.coerce.date().optional());
 
 const BLOG_STATUSES = ["draft", "published", "archived"] as const;
 
 export const createBlogSchema = z.object({
   title: z.string().trim().min(1).max(300),
-  category_id: z.string().uuid().optional(),
-  author_id: z.string().uuid().optional(),
+  category_id: optionalUuid,
+  author_id: optionalUuid,
   excerpt: z.string().trim().optional(),
   content: z.string().min(1),
   is_featured: z.coerce.boolean().default(false),
   status: z.enum(BLOG_STATUSES).default("draft"),
-  published_at: z.coerce.date().optional(),
+  published_at: optionalPublishedAt,
   recommended_blog_ids: uuidArrayDefaulted(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
@@ -61,14 +68,16 @@ export const createBlogSchema = z.object({
 
 export const updateBlogSchema = z.object({
   title: z.string().trim().min(1).max(300).optional(),
-  category_id: z.string().uuid().optional(),
-  author_id: z.string().uuid().optional(),
+  category_id: optionalUuid,
+  author_id: optionalUuid,
   excerpt: z.string().trim().optional(),
   content: z.string().min(1).optional(),
   is_featured: z.coerce.boolean().optional(),
   status: z.enum(BLOG_STATUSES).optional(),
-  published_at: z.coerce.date().optional(),
+  published_at: optionalPublishedAt,
   recommended_blog_ids: uuidArrayOptional(),
+  // Kept gallery URLs (multipart). New files arrive separately as `images` / `additional_images`.
+  images: urlArrayOptional(),
   meta_title: z.string().trim().max(200).optional(),
   meta_description: z.string().trim().optional(),
 });

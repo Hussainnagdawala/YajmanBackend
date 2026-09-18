@@ -148,3 +148,9 @@ export const insertBlogImage = `
 export const maxBlogImageOrder = `
   SELECT COALESCE(MAX(display_order), -1)::int AS max_order FROM blog_images WHERE blog_id = $1
 `;
+
+export const deleteBlogImagesNotIn = `
+  DELETE FROM blog_images
+  WHERE blog_id = $1 AND NOT (image_url = ANY($2::text[]))
+  RETURNING image_url
+`;

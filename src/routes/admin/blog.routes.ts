@@ -14,6 +14,7 @@ const setUploadFolder = (req: Request, _res: Response, next: NextFunction) => {
 const blogUploads = uploadFields([
   { name: "feature_image", maxCount: 1 },
   { name: "images", maxCount: 20 },
+  { name: "additional_images", maxCount: 20 },
 ]);
 
 /**

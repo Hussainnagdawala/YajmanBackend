@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
+import multer from "multer";
 import { AppError } from "../utils/errors";
 import { error } from "../utils/response";
 import { logger } from "../config/logger";
@@ -119,6 +120,18 @@ export const errorHandler = (err: unknown, req: Request, res: Response, _next: N
       503,
       "DATABASE_UNAVAILABLE"
     );
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return error(res, "This file field is not accepted for this upload", 400, "VALIDATION_ERROR", [
+        { field: err.field ?? "file", message: `Unexpected file field "${err.field}"` },
+      ]);
+    }
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return error(res, "One of the files is larger than the 10 MB limit", 400, "VALIDATION_ERROR");
+    }
+    return error(res, err.message || "File upload failed", 400, "VALIDATION_ERROR");
   }
 
   logger.error("Unhandled error", { ...serializeError(err), path: req.path, method: req.method });

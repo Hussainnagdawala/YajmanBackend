@@ -8,7 +8,10 @@ const serviceJson = `
     'feature_image_url', s.feature_image_url,
     'short_description', s.short_description,
     'rating_avg', s.rating_avg,
-    'category_slug', c.slug
+    'discount_percent', s.discount_percent,
+    'category_slug', c.slug,
+    'category_name', c.name,
+    'requires_payment', c.requires_payment
   ) AS service
 `;
 

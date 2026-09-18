@@ -36,10 +36,28 @@ import {
   setRecommendedBlogs,
   insertBlogImage,
   maxBlogImageOrder,
+  deleteBlogImagesNotIn,
 } from "../queries/blog.queries";
 
 type MulterS3Files = Record<string, Express.MulterS3.File[]>;
 type MulterS3File = Express.MulterS3.File;
+
+const BLOG_UPDATE_COLUMNS = new Set([
+  "title",
+  "category_id",
+  "author_id",
+  "excerpt",
+  "is_featured",
+  "status",
+  "published_at",
+  "meta_title",
+  "meta_description",
+]);
+
+const galleryFilesFrom = (files: MulterS3Files | undefined): Express.MulterS3.File[] => [
+  ...(files?.images ?? []),
+  ...(files?.additional_images ?? []),
+];
 
 // ─── Public: blog categories ─────────────────────────────────
 
@@ -274,19 +292,21 @@ export const createBlog = async (req: Request, res: Response, next: NextFunction
     ]);
     const blog = result.rows[0];
 
-    if (recommended_blog_ids.length > 0) {
+    if (recommended_blog_ids && recommended_blog_ids.length > 0) {
       const filtered = recommended_blog_ids.filter((id: string) => id !== blog.id);
       if (filtered.length > 0) await client.query(setRecommendedBlogs, [blog.id, filtered]);
     }
 
-    if (files?.images && files.images.length > 0) {
-      for (const [i, img] of files.images.entries()) {
+    const galleryFiles = galleryFilesFrom(files);
+    if (galleryFiles.length > 0) {
+      for (const [i, img] of galleryFiles.entries()) {
         await client.query(insertBlogImage, [blog.id, img.location, null, i]);
       }
     }
 
     await client.query("COMMIT");
-    return success(res, blog, "Blog created", 201);
+    const detail = await pool.query(findBlogByIdAdmin, [blog.id]);
+    return success(res, detail.rows[0], "Blog created", 201);
   } catch (err) {
     await client.query("ROLLBACK");
     next(err);
@@ -301,12 +321,13 @@ export const updateBlog = async (req: Request, res: Response, next: NextFunction
     const existing = await client.query(findBlogById, [req.params.id]);
     if (!existing.rows[0]) throw new AppError("NOT_FOUND", "Blog not found", 404);
 
-    const { recommended_blog_ids, content, ...rest } = req.body;
+    const { recommended_blog_ids, content, images, ...rest } = req.body;
     const files = req.files as MulterS3Files | undefined;
 
     const fields: string[] = [];
     const values: unknown[] = [];
     for (const [key, value] of Object.entries(rest)) {
+      if (!BLOG_UPDATE_COLUMNS.has(key)) continue;
       fields.push(key);
       values.push(value);
     }
@@ -340,10 +361,16 @@ export const updateBlog = async (req: Request, res: Response, next: NextFunction
       if (filtered.length > 0) await client.query(setRecommendedBlogs, [req.params.id, filtered]);
     }
 
-    if (files?.images && files.images.length > 0) {
+    const galleryFiles = galleryFilesFrom(files);
+    if (images !== undefined) {
+      const kept = images as string[];
+      const removed = await client.query<{ image_url: string }>(deleteBlogImagesNotIn, [req.params.id, kept]);
+      for (const row of removed.rows) await deleteFromS3(row.image_url);
+    }
+    if (galleryFiles.length > 0) {
       const maxOrder = await client.query<{ max_order: number }>(maxBlogImageOrder, [req.params.id]);
       let nextOrder = maxOrder.rows[0].max_order + 1;
-      for (const img of files.images) {
+      for (const img of galleryFiles) {
         await client.query(insertBlogImage, [req.params.id, img.location, null, nextOrder]);
         nextOrder += 1;
       }
@@ -351,7 +378,7 @@ export const updateBlog = async (req: Request, res: Response, next: NextFunction
 
     await client.query("COMMIT");
 
-    const detail = await pool.query(findBlogById, [req.params.id]);
+    const detail = await pool.query(findBlogByIdAdmin, [req.params.id]);
     return success(res, detail.rows[0], "Blog updated");
   } catch (err) {
     await client.query("ROLLBACK");

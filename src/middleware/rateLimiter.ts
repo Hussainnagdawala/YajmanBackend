@@ -27,7 +27,7 @@ export const globalRateLimiter = rateLimit({
 
 export const otpRateLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
-  max: 3,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.body?.phone || req.ip || "unknown",
