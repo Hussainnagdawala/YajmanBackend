@@ -36,6 +36,7 @@ import {
   notifyPaymentFailed,
   notifyRefundCompleted,
 } from "../services/order-notification.service";
+import { sendBookingInvoiceWhatsApp } from "../services/booking-invoice-whatsapp.service";
 import { categoryRequiresBookingTime, resolveBookingTime, resolveStoredBookingTime } from "../utils/booking-time";
 import { resolveCheckoutQuantity, roundMoney, serviceLineTotal } from "../utils/service-quantity";
 
@@ -292,6 +293,7 @@ const finalizeSuccessfulPayment = async (
     // so this fires exactly once whether the client verify call or the Razorpay
     // webhook wins the race for the row lock.
     void notifyBookingConfirmed(order);
+    void sendBookingInvoiceWhatsApp(order.id);
     return order;
   } catch (err) {
     await client.query("ROLLBACK");

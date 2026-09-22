@@ -3,9 +3,16 @@ import { s3Client } from "../config/s3";
 import { env } from "../config/env";
 import { pool } from "../config/database";
 import { logger } from "../config/logger";
-import { countInvoicesThisYear } from "../queries/invoice.queries";
+import {
+  countInvoicesThisYear,
+  findInvoiceByOrderId,
+  createInvoice,
+  updateInvoicePdfUrl,
+} from "../queries/invoice.queries";
+import { findBookingDetail } from "../queries/booking.queries";
 import { getSettingsByKeys } from "../queries/settings.queries";
 import { getSignedDownloadUrl, extractSpacesKey, spacesObjectExists } from "../utils/spaces";
+import { categoryRequiresBookingTime } from "../utils/booking-time";
 import { renderInvoicePdf } from "./invoice-pdf.renderer";
 import type { InvoiceBranding, InvoiceData } from "./invoice.types";
 
@@ -138,4 +145,117 @@ export const ensureInvoicePdfUrl = async (
     // gets a 200 with a link (even if that link 404s) rather than a 500.
     return { pdfUrl: await getSignedDownloadUrl(storedUrl) };
   }
+};
+
+// Booking-detail row from findBookingDetail (members/addons/payment joined).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BookingInvoiceOrder = any;
+
+const buildInvoiceSnapshot = (
+  order: BookingInvoiceOrder,
+  invoiceNumber: string
+): Omit<InvoiceData, "branding" | "issued_date"> => ({
+  invoice_number: invoiceNumber,
+  order: {
+    order_number: order.order_number,
+    customer_name: order.customer_name,
+    customer_phone: order.customer_phone,
+    customer_whatsapp: order.customer_whatsapp ?? null,
+    customer_email: order.customer_email ?? null,
+    booking_date: order.booking_date,
+    booking_time: order.booking_time,
+    address: order.address ?? null,
+    city: order.city ?? null,
+    state: order.state ?? null,
+    pincode: order.pincode ?? null,
+  },
+  service_title: order.service_title,
+  requires_booking_time: categoryRequiresBookingTime({
+    requires_booking_time: order.requires_booking_time,
+    slug: order.category_slug,
+  }),
+  members: (order.members ?? []) as string[],
+  gotra: order.gotra ?? null,
+  gotra_unknown: Boolean(order.gotra_unknown),
+  coupon_code: order.coupon_code ?? null,
+  special_instructions: order.special_instructions ?? null,
+  pandit: order.pandit?.display_name
+    ? { display_name: order.pandit.display_name, phone: order.pandit.phone ?? undefined }
+    : null,
+  addons: (order.addons ?? []).map((a: { name: string; price: number }) => ({
+    name: a.name,
+    price: Number(a.price),
+  })),
+  pricing: {
+    quantity: Number(order.quantity ?? 1),
+    unit_price: Number(order.unit_price ?? order.base_price),
+    base_price: Number(order.base_price),
+    discount_amount: Number(order.discount_amount),
+    convenience_fee: Number(order.convenience_fee),
+    total_amount: Number(order.total_amount),
+  },
+  payment: {
+    status: order.payment?.status ?? "pending",
+    method: order.payment?.method ?? null,
+    paid_at: order.payment?.paid_at ?? null,
+    amount: order.payment?.amount != null ? Number(order.payment.amount) : null,
+    razorpay_payment_id: order.payment?.razorpay_payment_id ?? null,
+  },
+});
+
+export type EnsuredOrderInvoice = {
+  invoice_number: string;
+  /** Public Spaces URL — use for WhatsApp PDF header (must stay fetchable). */
+  public_pdf_url: string;
+  /** Signed URL for in-app download. */
+  download_pdf_url: string;
+  order: BookingInvoiceOrder;
+  created: boolean;
+};
+
+/**
+ * Idempotent: returns existing invoice or creates PDF + row.
+ * Loads full booking detail (service, payment, addons) by order id.
+ */
+export const ensureOrderInvoice = async (orderId: string): Promise<EnsuredOrderInvoice> => {
+  const orderResult = await pool.query(findBookingDetail, [orderId]);
+  const order = orderResult.rows[0];
+  if (!order) {
+    throw new Error(`Order not found for invoice: ${orderId}`);
+  }
+
+  const existing = await pool.query(findInvoiceByOrderId, [order.id]);
+  if (existing.rows[0]) {
+    const invoice = existing.rows[0];
+    const { pdfUrl, correctedUrl } = await ensureInvoicePdfUrl(
+      invoice.pdf_url,
+      invoice.invoice_number,
+      invoice.invoice_data
+    );
+    if (correctedUrl) {
+      await pool.query(updateInvoicePdfUrl, [invoice.id, correctedUrl]);
+    }
+    return {
+      invoice_number: invoice.invoice_number,
+      public_pdf_url: correctedUrl ?? invoice.pdf_url,
+      download_pdf_url: pdfUrl,
+      order,
+      created: false,
+    };
+  }
+
+  const invoiceNumber = await generateInvoiceNumber();
+  const invoiceData = buildInvoiceSnapshot(order, invoiceNumber);
+  const pdfBuffer = await generateInvoicePdf(invoiceData);
+  const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
+  await pool.query(createInvoice, [order.id, invoiceNumber, publicPdfUrl, JSON.stringify(invoiceData)]);
+  const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
+
+  return {
+    invoice_number: invoiceNumber,
+    public_pdf_url: publicPdfUrl,
+    download_pdf_url: downloadPdfUrl,
+    order,
+    created: true,
+  };
 };

@@ -10,3 +10,5 @@ uploads/*
 !uploads/.gitkeep
 dump/
 .zip
+scripts/migration-output/
+dump-yamprod-202608061629.sql
