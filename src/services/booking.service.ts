@@ -4,8 +4,14 @@ import { logger } from "../config/logger";
 import { razorpay } from "../config/razorpay";
 import { toISTDateTime, hoursUntil, isPast } from "../utils/date";
 import { countOrdersToday, findDuplicateBooking } from "../queries/order.queries";
-import { findBookingById, finalizeCancellation, findLatestPaymentForOrder, freePanditAssignment } from "../queries/booking.queries";
+import {
+  findBookingByIdForUpdate,
+  finalizeCancellation,
+  findLatestPaymentForOrder,
+  freePanditAssignment,
+} from "../queries/booking.queries";
 import { markPaymentRefunded } from "../queries/payment.queries";
+import { deleteCouponUsage, decrementCouponUsageCount } from "../queries/coupon.queries";
 import { insertActivityLog } from "../queries/settings.queries";
 import { notifyBookingCancelled } from "./order-notification.service";
 
@@ -107,51 +113,84 @@ export type RefundOutcome = "not_applicable" | "success" | "failed";
 // Shared by both the customer cancel endpoint and the admin cancel endpoint.
 // Attempts the Razorpay refund BEFORE writing any terminal status, so a
 // refund failure never gets silently reported to the caller as "cancelled".
+//
+// The order row is locked (FOR UPDATE) for the whole operation, including
+// the Razorpay call — otherwise two near-simultaneous cancels (double-click,
+// or customer + admin racing) could both pass the cancellable-status check
+// before either writes, firing two refunds for the same payment. Cancel is
+// low-frequency, so holding the lock across the external call is an
+// acceptable tradeoff for that correctness guarantee.
 export const cancelOrderWithRefund = async (
   orderId: string,
   reason: string,
   cancelledByUserId: string,
   options?: { bypassTimeWindow?: boolean }
 ): Promise<{ order: Record<string, unknown>; refundOutcome: RefundOutcome }> => {
-  const orderResult = await pool.query(findBookingById, [orderId]);
-  const order = orderResult.rows[0];
-  if (!order) throw new AppError("NOT_FOUND", "Booking not found", 404);
+  const client = await pool.connect();
+  let updatedOrder: any; // pg row shape from finalizeCancellation's RETURNING *
+  let refundOutcome: RefundOutcome;
+  let previousStatus: string;
 
-  if (NON_CANCELLABLE_STATUSES.includes(order.status)) {
-    throw new AppError("VALIDATION_ERROR", `Cannot cancel a booking with status '${order.status}'`, 400);
-  }
-  if (!options?.bypassTimeWindow && hoursUntil(new Date(order.booking_datetime)) < CANCEL_MIN_HOURS) {
-    throw new AppError("CANCEL_TOO_LATE", "Cannot cancel less than 24 hours before the booking", 400);
-  }
+  try {
+    await client.query("BEGIN");
 
-  const paymentResult = await pool.query(findLatestPaymentForOrder, [orderId]);
-  const payment = paymentResult.rows[0];
+    const orderResult = await client.query(findBookingByIdForUpdate, [orderId]);
+    const order = orderResult.rows[0];
+    if (!order) throw new AppError("NOT_FOUND", "Booking not found", 404);
+    previousStatus = order.status;
 
-  let finalStatus: "cancelled" | "refunded" | "refund_failed" = "cancelled";
-  let refundOutcome: RefundOutcome = "not_applicable";
-
-  if (payment && payment.status === "captured") {
-    try {
-      const refund = await razorpay.payments.refund(payment.razorpay_payment_id, {
-        amount: Math.round(Number(payment.amount) * 100),
-      });
-      await pool.query(markPaymentRefunded, [payment.id, Number(refund.amount) / 100, refund.id]);
-      finalStatus = "refunded";
-      refundOutcome = "success";
-    } catch (err) {
-      logger.error("Razorpay refund failed", { err, orderId, paymentId: payment.id });
-      finalStatus = "refund_failed";
-      refundOutcome = "failed";
+    if (NON_CANCELLABLE_STATUSES.includes(order.status)) {
+      throw new AppError("VALIDATION_ERROR", `Cannot cancel a booking with status '${order.status}'`, 400);
     }
-  }
+    if (!options?.bypassTimeWindow && hoursUntil(new Date(order.booking_datetime)) < CANCEL_MIN_HOURS) {
+      throw new AppError("CANCEL_TOO_LATE", "Cannot cancel less than 24 hours before the booking", 400);
+    }
 
-  await pool.query(freePanditAssignment, [orderId]);
-  const updatedOrder = (await pool.query(finalizeCancellation, [orderId, finalStatus, reason, cancelledByUserId])).rows[0];
+    const paymentResult = await client.query(findLatestPaymentForOrder, [orderId]);
+    const payment = paymentResult.rows[0];
+
+    let finalStatus: "cancelled" | "refunded" | "refund_failed" = "cancelled";
+    refundOutcome = "not_applicable";
+
+    if (payment && payment.status === "captured") {
+      try {
+        const refund = await razorpay.payments.refund(payment.razorpay_payment_id, {
+          amount: Math.round(Number(payment.amount) * 100),
+        });
+        await client.query(markPaymentRefunded, [payment.id, Number(refund.amount) / 100, refund.id]);
+        finalStatus = "refunded";
+        refundOutcome = "success";
+      } catch (err) {
+        logger.error("Razorpay refund failed", { err, orderId, paymentId: payment.id });
+        finalStatus = "refund_failed";
+        refundOutcome = "failed";
+      }
+    }
+
+    await client.query(freePanditAssignment, [orderId]);
+    updatedOrder = (await client.query(finalizeCancellation, [orderId, finalStatus, reason, cancelledByUserId])).rows[0];
+
+    // Only release the coupon's usage slot once the refund actually went
+    // through — not on plain 'cancelled' (no captured payment, so the usage
+    // was never recorded) and not on 'refund_failed' (money hasn't actually
+    // been returned yet; a later retry may still succeed).
+    if (finalStatus === "refunded" && order.coupon_id) {
+      await client.query(deleteCouponUsage, [orderId]);
+      await client.query(decrementCouponUsageCount, [order.coupon_id]);
+    }
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 
   await logOrderActivity(cancelledByUserId, "cancel_order", orderId, {
     description: `Order cancelled (refund: ${refundOutcome}): ${reason}`,
-    oldData: { status: order.status },
-    newData: { status: finalStatus },
+    oldData: { status: previousStatus },
+    newData: { status: updatedOrder.status },
   });
 
   // Fires for both the customer cancel endpoint and the admin cancel endpoint —

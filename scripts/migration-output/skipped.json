@@ -1,0 +1,302 @@
+{
+  "staff_role_skipped": {
+    "count": 96,
+    "sample": [
+      {
+        "old_id": 1,
+        "phone_raw": "9966332266",
+        "email": "superAdmin@mailinator.com"
+      },
+      {
+        "old_id": 336,
+        "phone_raw": "8959004176",
+        "email": "yajman.devendra@gmail.com"
+      },
+      {
+        "old_id": 394,
+        "phone_raw": "9098329847",
+        "email": null
+      },
+      {
+        "old_id": 404,
+        "phone_raw": "9340480131",
+        "email": "testnitest@gmail.com"
+      },
+      {
+        "old_id": 423,
+        "phone_raw": "7722831779",
+        "email": "harshita.yajmanapp@gmail.com"
+      },
+      {
+        "old_id": 558,
+        "phone_raw": "1234567860",
+        "email": null
+      },
+      {
+        "old_id": 605,
+        "phone_raw": "9977550570",
+        "email": "test2@mail.com"
+      },
+      {
+        "old_id": 634,
+        "phone_raw": "6264197761",
+        "email": null
+      },
+      {
+        "old_id": 699,
+        "phone_raw": "9074398084",
+        "email": null
+      },
+      {
+        "old_id": 701,
+        "phone_raw": "7879650173",
+        "email": null
+      },
+      {
+        "old_id": 704,
+        "phone_raw": "9827025757",
+        "email": null
+      },
+      {
+        "old_id": 761,
+        "phone_raw": "6265832674",
+        "email": null
+      },
+      {
+        "old_id": 2591,
+        "phone_raw": "9407223228",
+        "email": null
+      },
+      {
+        "old_id": 3017,
+        "phone_raw": "7140305764",
+        "email": null
+      },
+      {
+        "old_id": 11034,
+        "phone_raw": "6265358177",
+        "email": "test21@mail.com"
+      },
+      {
+        "old_id": 13114,
+        "phone_raw": "7409330604",
+        "email": null
+      },
+      {
+        "old_id": 13162,
+        "phone_raw": "7067789239",
+        "email": "test@gmail.com"
+      },
+      {
+        "old_id": 13179,
+        "phone_raw": "7089037348",
+        "email": "namans@gmail.com"
+      },
+      {
+        "old_id": 13190,
+        "phone_raw": "9713066818",
+        "email": null
+      },
+      {
+        "old_id": 13266,
+        "phone_raw": "9479355108",
+        "email": null
+      },
+      {
+        "old_id": 13267,
+        "phone_raw": "9479355111",
+        "email": null
+      },
+      {
+        "old_id": 13375,
+        "phone_raw": "8004061119",
+        "email": null
+      },
+      {
+        "old_id": 13409,
+        "phone_raw": "9617270917",
+        "email": null
+      },
+      {
+        "old_id": 13587,
+        "phone_raw": "9584713134",
+        "email": "yugantarguru111@gmail.com"
+      },
+      {
+        "old_id": 13817,
+        "phone_raw": "9314868687",
+        "email": null
+      },
+      {
+        "old_id": 13937,
+        "phone_raw": "9244579805",
+        "email": "swarnim@gmail.com"
+      },
+      {
+        "old_id": 13988,
+        "phone_raw": "8889209936",
+        "email": "nileshsharma078@gmail.com"
+      },
+      {
+        "old_id": 13993,
+        "phone_raw": "9669055208",
+        "email": "alok@gmail.com"
+      },
+      {
+        "old_id": 13997,
+        "phone_raw": "7978550855",
+        "email": "avnish@gmail.com"
+      },
+      {
+        "old_id": 14002,
+        "phone_raw": "6261829817",
+        "email": "sanatni52pt.ujjwalshastri@gmail.com"
+      },
+      {
+        "old_id": 14024,
+        "phone_raw": "9232158843",
+        "email": "ani@gmail.com"
+      },
+      {
+        "old_id": 14041,
+        "phone_raw": "9826131582",
+        "email": null
+      },
+      {
+        "old_id": 14065,
+        "phone_raw": "9893946914",
+        "email": "kuldeepvyas520@gmail.com"
+      },
+      {
+        "old_id": 14073,
+        "phone_raw": "9109873312",
+        "email": "wxyz@gmail.com"
+      },
+      {
+        "old_id": 14075,
+        "phone_raw": "6392563230",
+        "email": "raju@gmail.com"
+      },
+      {
+        "old_id": 14084,
+        "phone_raw": "9340295170",
+        "email": "rahgsgh@gmail.com"
+      },
+      {
+        "old_id": 14104,
+        "phone_raw": "9161507064",
+        "email": "rju@gmail.com"
+      },
+      {
+        "old_id": 14132,
+        "phone_raw": "9893593433",
+        "email": "umashankar@gmail.com"
+      },
+      {
+        "old_id": 14211,
+        "phone_raw": "6261250648",
+        "email": "Jitendra@gmail.com"
+      },
+      {
+        "old_id": 14252,
+        "phone_raw": "7415769471",
+        "email": "pritam@gmail.com"
+      },
+      {
+        "old_id": 14266,
+        "phone_raw": "9584051688",
+        "email": null
+      },
+      {
+        "old_id": 14269,
+        "phone_raw": "7804056883",
+        "email": "somesh12@gmail.com"
+      },
+      {
+        "old_id": 14277,
+        "phone_raw": "9926637339",
+        "email": "mohitp@gmail.com"
+      },
+      {
+        "old_id": 14278,
+        "phone_raw": "7489457513",
+        "email": null
+      },
+      {
+        "old_id": 14287,
+        "phone_raw": "8817083190",
+        "email": null
+      },
+      {
+        "old_id": 14333,
+        "phone_raw": "9977746557",
+        "email": null
+      },
+      {
+        "old_id": 14337,
+        "phone_raw": "9630844800",
+        "email": "kanaiyal@gmail.com"
+      },
+      {
+        "old_id": 14378,
+        "phone_raw": "8839541212",
+        "email": "dadhich@gmail.com"
+      },
+      {
+        "old_id": 14381,
+        "phone_raw": "9754466794",
+        "email": "kuldeeps@gmail.com"
+      },
+      {
+        "old_id": 14387,
+        "phone_raw": "8130926996",
+        "email": null
+      }
+    ]
+  },
+  "invalid_phone_format": {
+    "count": 8,
+    "sample": [
+      {
+        "old_id": 11576,
+        "phone_raw": "563582609",
+        "email": null
+      },
+      {
+        "old_id": 11579,
+        "phone_raw": "526814890",
+        "email": null
+      },
+      {
+        "old_id": 11588,
+        "phone_raw": "557901341",
+        "email": null
+      },
+      {
+        "old_id": 11758,
+        "phone_raw": "552324250",
+        "email": null
+      },
+      {
+        "old_id": 11760,
+        "phone_raw": "552324252",
+        "email": null
+      },
+      {
+        "old_id": 13727,
+        "phone_raw": "0",
+        "email": "Adityaved@gmail.com"
+      },
+      {
+        "old_id": 13732,
+        "phone_raw": "0",
+        "email": "Ajaya@gmail.com"
+      },
+      {
+        "old_id": 14049,
+        "phone_raw": "0",
+        "email": "priyansh121@gmail.com"
+      }
+    ]
+  }
+}

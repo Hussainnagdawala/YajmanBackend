@@ -8,8 +8,9 @@ import { razorpay } from "../../config/razorpay";
 import { assertValidStatusTransition, cancelOrderWithRefund, logOrderActivity } from "../../services/booking.service";
 import { resolveInvoicePdfUrl } from "../../services/invoice.service";
 import { notifyOrderStatusChange } from "../../services/order-notification.service";
-import { findLatestPaymentForOrder } from "../../queries/booking.queries";
+import { findBookingByIdForUpdate, findLatestPaymentForOrder } from "../../queries/booking.queries";
 import { markPaymentRefunded } from "../../queries/payment.queries";
+import { deleteCouponUsage, decrementCouponUsageCount } from "../../queries/coupon.queries";
 import {
   listOrdersAdmin as listOrdersAdminQuery,
   countOrdersAdmin,
@@ -127,39 +128,61 @@ export const getOrderActivity = async (req: Request, res: Response, next: NextFu
   }
 };
 
+// Same lock-across-the-external-call shape as cancelOrderWithRefund — a
+// double-click on "Retry Refund" must not fire two Razorpay refunds for the
+// same payment.
 export const retryRefund = async (req: Request, res: Response, next: NextFunction) => {
+  const client = await pool.connect();
   try {
-    const orderResult = await pool.query(findOrderById, [req.params.id]);
+    await client.query("BEGIN");
+
+    const orderResult = await client.query(findBookingByIdForUpdate, [req.params.id]);
     const order = orderResult.rows[0];
     if (!order) throw new AppError("NOT_FOUND", "Order not found", 404);
     if (order.status !== "refund_failed") {
       throw new AppError("VALIDATION_ERROR", `Order status is '${order.status}', expected 'refund_failed'`, 400);
     }
 
-    const paymentResult = await pool.query(findLatestPaymentForOrder, [order.id]);
+    const paymentResult = await client.query(findLatestPaymentForOrder, [order.id]);
     const payment = paymentResult.rows[0];
     if (!payment || payment.status !== "captured") {
       throw new AppError("VALIDATION_ERROR", "No captured payment found to refund", 400);
     }
 
+    let refund;
     try {
-      const refund = await razorpay.payments.refund(payment.razorpay_payment_id, {
+      refund = await razorpay.payments.refund(payment.razorpay_payment_id, {
         amount: Math.round(Number(payment.amount) * 100),
       });
-      await pool.query(markPaymentRefunded, [payment.id, Number(refund.amount) / 100, refund.id]);
-      const updated = await pool.query(updateOrderStatus, [order.id, "refunded"]);
-      await logOrderActivity(req.user!.id, "retry_refund_success", order.id, {
-        description: "Manual refund retry succeeded",
-      });
-      return success(res, updated.rows[0], "Refund processed");
     } catch (err) {
+      await client.query("ROLLBACK");
       logger.error("Manual refund retry failed", { err, orderId: order.id, paymentId: payment.id });
       await logOrderActivity(req.user!.id, "retry_refund_failed", order.id, {
         description: "Manual refund retry failed again",
       });
       throw new AppError("PAYMENT_GATEWAY_ERROR", "Refund retry failed — check Razorpay dashboard", 502);
     }
+
+    await client.query(markPaymentRefunded, [payment.id, Number(refund.amount) / 100, refund.id]);
+    const updated = await client.query(updateOrderStatus, [order.id, "refunded"]);
+
+    if (order.coupon_id) {
+      await client.query(deleteCouponUsage, [order.id]);
+      await client.query(decrementCouponUsageCount, [order.coupon_id]);
+    }
+
+    await client.query("COMMIT");
+
+    await logOrderActivity(req.user!.id, "retry_refund_success", order.id, {
+      description: "Manual refund retry succeeded",
+    });
+    return success(res, updated.rows[0], "Refund processed");
   } catch (err) {
+    // Harmless if the refund-failure branch above already rolled back —
+    // ROLLBACK outside a transaction is a no-op notice, not an error.
+    await client.query("ROLLBACK").catch(() => {});
     next(err);
+  } finally {
+    client.release();
   }
 };

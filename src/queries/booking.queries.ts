@@ -77,6 +77,14 @@ export const findBookingDetail = `
 
 export const findBookingById = `SELECT * FROM orders WHERE id = $1`;
 
+// Row-locked variant for cancelOrderWithRefund — held for the duration of
+// the cancel/refund transaction so two near-simultaneous cancel calls
+// (double-click, or customer + admin racing) can't both pass the
+// cancellable-status check and both fire a Razorpay refund for the same
+// payment. The second caller blocks here until the first commits, then
+// re-reads the now-terminal status and no-ops cleanly.
+export const findBookingByIdForUpdate = `SELECT * FROM orders WHERE id = $1 FOR UPDATE`;
+
 // $2 is the terminal status to land on: 'cancelled' (no captured payment to
 // refund), 'refunded' (refund succeeded), or 'refund_failed' (refund threw).
 export const finalizeCancellation = `

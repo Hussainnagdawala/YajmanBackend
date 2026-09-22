@@ -1,0 +1,42 @@
+{
+  "dump_file": "E:\\sister's work\\clients\\yajman\\yajman-backend\\dump-yamprod-202608061629.sql",
+  "total_parsed": 14771,
+  "migrated": 14667,
+  "skipped_by_reason": {
+    "staff_role_skipped": 96,
+    "invalid_phone_format": 8
+  },
+  "non_fatal_notes": {
+    "status_unmapped_defaulted_active": {
+      "count": 5,
+      "samples": [
+        2
+      ]
+    },
+    "avatar_url_unverified": {
+      "count": 182,
+      "samples": [
+        "https://templeimages.blr1.digitaloceanspaces.com/pandit/1768907286423.png",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1728840001419.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1741076942090.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1725342079507.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1742198485503.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/jyotish/1738058021004.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/users/1726214075688.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/jyotish/1732087571891.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/pandit/1771048924576.jpeg",
+        "https://templeimages.blr1.digitaloceanspaces.com/jyotish/1734945367020.png",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1727845118383.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1759936736476.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1737549552619.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1732339797307.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1732359738867.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1732578147646.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1736245585429.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1737619850687.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1736150193208.jpg",
+        "https://templeimages.blr1.digitaloceanspaces.com/profile_pic/1734714638573.jpg"
+      ]
+    }
+  }
+}

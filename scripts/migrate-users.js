@@ -281,8 +281,12 @@ async function main() {
     if (skipped[reason].length < 50) skipped[reason].push(entry); // cap sample size, keep count separately
     skipped[`${reason}__count`] = (skipped[`${reason}__count`] || 0) + 1;
   };
-  const addNote = (reason) => {
-    softNotes[reason] = (softNotes[reason] || 0) + 1;
+  const addNote = (reason, sampleValue) => {
+    if (!softNotes[reason]) softNotes[reason] = { count: 0, samples: [] };
+    softNotes[reason].count++;
+    if (sampleValue !== undefined && softNotes[reason].samples.length < 20 && !softNotes[reason].samples.includes(sampleValue)) {
+      softNotes[reason].samples.push(sampleValue);
+    }
   };
 
   const candidates = []; // successfully transformed, pre-dedup
@@ -301,16 +305,16 @@ async function main() {
     }
 
     const statusResult = normalizeStatus(u.status);
-    if (statusResult.unmapped) addNote("status_unmapped_defaulted_active");
+    if (statusResult.unmapped) addNote("status_unmapped_defaulted_active", u.status);
 
     const email = normalizeEmail(u.email);
-    if (u.email && !email) addNote("email_dropped_invalid_format");
+    if (u.email && !email) addNote("email_dropped_invalid_format", u.email);
 
     const dob = normalizeDob(u.dob);
-    if (u.dob && !dob) addNote("dob_dropped_invalid");
+    if (u.dob && !dob) addNote("dob_dropped_invalid", u.dob);
 
     const avatarUrl = u.profilePic ? String(u.profilePic).trim() || null : null;
-    if (avatarUrl) addNote("avatar_url_unverified"); // can't check reachability offline
+    if (avatarUrl) addNote("avatar_url_unverified", avatarUrl); // can't check reachability offline
 
     const createdAt = istNaiveToUtcIso(u.createdAt) || new Date().toISOString();
     if (!u.createdAt) addNote("created_at_defaulted_now");

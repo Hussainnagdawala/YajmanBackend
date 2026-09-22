@@ -81,3 +81,14 @@ export const insertCouponUsage = `
 export const incrementCouponUsageCount = `
   UPDATE coupons SET usage_count = usage_count + 1 WHERE id = $1
 `;
+
+// Reverse of the two above — called when a captured, coupon-discounted
+// order actually gets refunded, so the usage slot becomes available again
+// instead of being permanently burned by a cancelled booking.
+export const deleteCouponUsage = `
+  DELETE FROM coupon_usages WHERE order_id = $1
+`;
+
+export const decrementCouponUsageCount = `
+  UPDATE coupons SET usage_count = GREATEST(usage_count - 1, 0) WHERE id = $1
+`;
