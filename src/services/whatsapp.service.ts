@@ -177,6 +177,92 @@ export const sendNxcTemplateWithPdf = async (
   }
 };
 
+export type SendNxcTemplateTextInput = {
+  /** Full WhatsApp number with country code, no + (e.g. 919876543210). */
+  to: string;
+  templateId: string;
+  language: string;
+  variables: NxcTemplateVariables;
+};
+
+/**
+ * NXC WABA JSON API — plain text template, no document header. Same
+ * create-message-json endpoint as sendNxcTemplateWithPdf, just without the
+ * file/file_name fields (NXC only expects them when the approved template
+ * actually has a document header component).
+ */
+export const sendNxcTemplateText = async (
+  input: SendNxcTemplateTextInput
+): Promise<{ taskId?: string | number } | null> => {
+  if (!env.NXC_APP_KEY || !env.NXC_AUTH_KEY) {
+    logger.debug("[WhatsApp:nxc] skipped — missing NXC_APP_KEY / NXC_AUTH_KEY", {
+      to: maskPhone(input.to),
+      templateId: input.templateId,
+    });
+    return null;
+  }
+
+  const to = input.to.replace(/\D/g, "");
+  const payload: Record<string, unknown> = {
+    appkey: env.NXC_APP_KEY,
+    authkey: env.NXC_AUTH_KEY,
+    to: [to],
+    template_id: input.templateId,
+    language: input.language.trim(),
+  };
+  if (input.variables && Object.keys(input.variables).length > 0) {
+    payload.variables = input.variables;
+  }
+
+  logger.info("WhatsApp NXC text template request", {
+    to: maskPhone(to),
+    templateId: input.templateId,
+    language: input.language,
+    variableKeys: Object.keys(input.variables ?? {}),
+  });
+
+  const res = await fetch(env.NXC_API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.text();
+
+  if (!res.ok) {
+    logger.error("WhatsApp NXC text template send failed", {
+      to: maskPhone(to),
+      templateId: input.templateId,
+      status: res.status,
+      body,
+    });
+    throw new Error(`NXC WhatsApp send failed (${res.status})`);
+  }
+
+  try {
+    const parsed = JSON.parse(body) as {
+      data?: { id?: string | number; task_id?: string | number };
+    };
+    const taskId = parsed.data?.task_id ?? parsed.data?.id;
+    logger.info("WhatsApp NXC text template accepted", {
+      to: maskPhone(to),
+      templateId: input.templateId,
+      taskId,
+      bodyPreview: body.slice(0, 300),
+    });
+    if (taskId != null) {
+      void pollNxcMessageStatus(taskId, input.templateId, to);
+    }
+    return { taskId };
+  } catch {
+    logger.info("WhatsApp NXC text template response (non-JSON)", {
+      to: maskPhone(to),
+      status: res.status,
+      body: body.slice(0, 500),
+    });
+    return {};
+  }
+};
+
 /** Normalize Indian booking phone / WhatsApp to 91XXXXXXXXXX. */
 export const toWhatsAppRecipient = (phone: string | null | undefined): string | null => {
   if (!phone) return null;

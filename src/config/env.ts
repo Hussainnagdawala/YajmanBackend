@@ -52,6 +52,9 @@ const envSchema = z.object({
   // Invoice / booking confirmation (NXC "Variable With PDF" template)
   NXC_INVOICE_TEMPLATE_ID: z.string().default("complete_booking"),
   NXC_INVOICE_LANG: z.string().default("en_US"),
+  // Booking cancellation / refund status (plain text template, no PDF)
+  NXC_CANCELLATION_TEMPLATE_ID: z.string().default(""),
+  NXC_CANCELLATION_LANG: z.string().default("en_US"),
 
   RAZORPAY_KEY_ID: z.string().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),
