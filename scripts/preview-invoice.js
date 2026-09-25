@@ -10,22 +10,22 @@ async function main() {
   const { renderInvoicePdf } = require("../src/services/invoice-pdf.renderer");
 
   const sample = {
-    invoice_number: "INV-2026-0042",
-    issued_date: "2026-08-28",
+    invoice_number: "YJM0920260057",
+    issued_date: "2026-09-24",
     order: {
       order_number: "ORD-20260828-001",
-      customer_name: "Rajesh Kumar Sharma",
-      customer_phone: "+91 9876543210",
+      customer_name: "Kuldeep Singh Tanwar",
+      customer_phone: "+91 8120539394",
       customer_whatsapp: "+91 9876543210",
       customer_email: "rajesh@example.com",
-      booking_date: "2026-09-15",
+      booking_date: "2026-10-10",
       booking_time: "09:00",
       address: "Flat 402, Green Valley Apartments, MG Road",
       city: "Mumbai",
       state: "Maharashtra",
       pincode: "400001",
     },
-    service_title: "Satyanarayan Puja — Full Package with Prasad",
+    service_title: "Sarva Pirtu Amavasya Brahmin Bhoj Seva",
     requires_booking_time: true,
     members: ["Rajesh Kumar", "Priya Sharma", "Arjun Sharma"],
     gotra: "Bharadwaj",
