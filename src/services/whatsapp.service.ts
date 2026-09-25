@@ -16,6 +16,20 @@ export type SendNxcTemplateWithPdfInput = {
   buttons?: Record<string, string>;
 };
 
+export type NxcSendResult = {
+  taskId?: string | number;
+  /** Present when waitForDelivery is set. "accepted" means NXC queued it and status never left pending. */
+  deliveryStatus?: string;
+  deliveryError?: string;
+  waMessageId?: string | null;
+};
+
+type NxcStatusRow = {
+  status?: string;
+  error?: string;
+  wa_message_id?: string | null;
+};
+
 const maskPhone = (to: string): string => {
   const digits = to.replace(/\D/g, "");
   if (digits.length < 4) return "****";
@@ -40,8 +54,9 @@ const pollNxcMessageStatus = async (
   taskId: string | number,
   templateId: string,
   to: string
-): Promise<void> => {
+): Promise<NxcStatusRow | null> => {
   const delays = [3_000, 8_000, 15_000];
+  let latest: NxcStatusRow | null = null;
   for (const delay of delays) {
     await new Promise((r) => setTimeout(r, delay));
     try {
@@ -56,14 +71,11 @@ const pollNxcMessageStatus = async (
       });
       const body = await res.text();
       const parsed = JSON.parse(body) as {
-        data?: Array<{ status?: string; error?: string; wa_message_id?: string | null }> | {
-          status?: string;
-          error?: string;
-          wa_message_id?: string | null;
-        };
+        data?: NxcStatusRow[] | NxcStatusRow;
       };
       const row = Array.isArray(parsed.data) ? parsed.data[0] : parsed.data;
       const status = row?.status ?? "unknown";
+      latest = row ?? { status };
       if (status === "pending") continue;
       if (status === "failed") {
         logger.error("WhatsApp NXC delivery failed", {
@@ -73,7 +85,7 @@ const pollNxcMessageStatus = async (
           error: row?.error,
           status,
         });
-        return;
+        return latest;
       }
       logger.info("WhatsApp NXC delivery status", {
         taskId,
@@ -82,11 +94,12 @@ const pollNxcMessageStatus = async (
         status,
         waMessageId: row?.wa_message_id,
       });
-      return;
+      return latest;
     } catch (err) {
       logger.warn("WhatsApp NXC status poll failed", { err, taskId });
     }
   }
+  return latest;
 };
 
 /**
@@ -94,8 +107,9 @@ const pollNxcMessageStatus = async (
  * POST /create-message-json with template_id, file, file_name, variables.
  */
 export const sendNxcTemplateWithPdf = async (
-  input: SendNxcTemplateWithPdfInput
-): Promise<{ taskId?: string | number } | null> => {
+  input: SendNxcTemplateWithPdfInput,
+  options?: { waitForDelivery?: boolean }
+): Promise<NxcSendResult | null> => {
   if (!env.NXC_APP_KEY || !env.NXC_AUTH_KEY) {
     logger.debug("[WhatsApp:nxc] skipped — missing NXC_APP_KEY / NXC_AUTH_KEY", {
       to: maskPhone(input.to),
@@ -162,7 +176,17 @@ export const sendNxcTemplateWithPdf = async (
       taskId,
       bodyPreview: body.slice(0, 300),
     });
-    // Queue success ≠ delivery. Poll /message-status in the background when we have a task id.
+    // Queue success ≠ delivery. Final Booking polls in the background.
+    // send-document waits so the HTTP response matches WhatsApp's result.
+    if (taskId != null && options?.waitForDelivery) {
+      const row = await pollNxcMessageStatus(taskId, input.templateId, to);
+      return {
+        taskId,
+        deliveryStatus: row?.status ?? "pending",
+        deliveryError: row?.error,
+        waMessageId: row?.wa_message_id ?? null,
+      };
+    }
     if (taskId != null) {
       void pollNxcMessageStatus(taskId, input.templateId, to);
     }

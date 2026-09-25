@@ -42,7 +42,8 @@ const envSchema = z.object({
   // WHATSAPP_OTP_HAS_BUTTON: z.string().default("true").transform((v) => v !== "false"),
 
   // WABA NXC (BSP) — used when OTP_PROVIDER=nxc
-  NXC_API_URL: z.string().default("https://waba.nxccontrols.in/api/create-message"),
+  // JSON API (Postman "Variable With PDF" / create-message-json). Form-data lives at /create-message.
+  NXC_API_URL: z.string().default("https://waba.nxccontrols.in/api/create-message-json"),
   NXC_APP_KEY: z.string().default(""),
   NXC_AUTH_KEY: z.string().default(""),
   NXC_OTP_TEMPLATE_ID: z.string().default(""),
@@ -52,6 +53,9 @@ const envSchema = z.object({
   // Invoice / booking confirmation (NXC "Variable With PDF" template)
   NXC_INVOICE_TEMPLATE_ID: z.string().default("complete_booking"),
   NXC_INVOICE_LANG: z.string().default("en_US"),
+  // send-document API: Utility template booking_invoice (en_US, DOCUMENT header, no body variables)
+  NXC_DOCUMENT_TEMPLATE_ID: z.string().default("booking_invoice"),
+  NXC_DOCUMENT_LANG: z.string().default("en_US"),
 
   RAZORPAY_KEY_ID: z.string().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),

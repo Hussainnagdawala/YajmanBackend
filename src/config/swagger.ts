@@ -48,7 +48,7 @@ const swaggerDefinition: swaggerJSDoc.OAS3Definition = {
     { name: "Admin: Reviews" }, { name: "Admin: Invoices" }, { name: "Admin: Pandit Assignments" },
     { name: "Admin: Pandits" }, { name: "Admin: Contact Entries" }, { name: "Admin: Dashboard" },
     { name: "Admin: Orders" }, { name: "Admin: Notifications" }, { name: "Admin: App Settings" },
-    { name: "Admin: Addons" }, { name: "Admin: Gallery" },
+    { name: "Admin: Addons" }, { name: "Admin: Gallery" }, { name: "Admin: WhatsApp" },
   ],
   components: {
     securitySchemes: {

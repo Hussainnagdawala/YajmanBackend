@@ -49,11 +49,13 @@ import bannerRoutes from "./banner.routes";
 import pujaProcessRoutes from "./puja-process.routes";
 import servicePlacementRoutes from "./service-placement.routes";
 import legalRoutes from "./legal.routes";
+import whatsappDocumentRoutes from "./admin/whatsapp-document.routes";
 
 const router = Router();
 
 router.use("/auth", authRoutes);
 router.use("/profile", authenticate, profileRoutes);
+router.use("/admin/whatsapp", whatsappDocumentRoutes);
 router.use("/admin", authenticate, requireRole("admin"), adminRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/types", typeRoutes);

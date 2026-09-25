@@ -5,6 +5,7 @@ import { RequestHandler, Request, Response, NextFunction } from "express";
 import multerS3 from "multer-s3";
 import { s3Client } from "../config/s3";
 import { env } from "../config/env";
+import { AppError } from "../utils/errors";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
 const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
@@ -74,6 +75,25 @@ const wrap = (mw: RequestHandler): RequestHandler =>
     });
   }) as unknown as RequestHandler;
 
+const pdfUpload = multer({
+  storage: s3Storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = (file.originalname || "").toLowerCase();
+    const isPdf = file.mimetype === "application/pdf" || name.endsWith(".pdf");
+    if (!isPdf) {
+      cb(
+        new AppError("VALIDATION_ERROR", "Attachment must be a PDF document", 422, [
+          { field: "attachment", message: "Only PDF files are accepted" },
+        ])
+      );
+      return;
+    }
+    cb(null, true);
+  },
+});
+
 export const uploadSingle = (field: string) => wrap(upload.single(field) as unknown as RequestHandler);
+export const uploadPdfSingle = (field: string) => wrap(pdfUpload.single(field) as unknown as RequestHandler);
 export const uploadArray = (field: string, max: number) => wrap(upload.array(field, max) as unknown as RequestHandler);
 export const uploadFields = (fields: multer.Field[]) => wrap(upload.fields(fields) as unknown as RequestHandler);

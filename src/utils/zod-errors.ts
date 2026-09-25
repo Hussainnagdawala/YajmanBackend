@@ -43,6 +43,7 @@ const FIELD_LABELS: Record<string, string> = {
   customer_name: "Customer name",
   customer_phone: "Phone number",
   customer_whatsapp: "WhatsApp number",
+  phone_number: "WhatsApp number",
   customer_calling_number: "Calling number",
   customer_email: "Email",
   members: "Member names",
