@@ -56,6 +56,9 @@ const envSchema = z.object({
   // send-document API: Utility template booking_invoice (en_US, DOCUMENT header, no body variables)
   NXC_DOCUMENT_TEMPLATE_ID: z.string().default("booking_invoice"),
   NXC_DOCUMENT_LANG: z.string().default("en_US"),
+  // Booking cancellation / refund status (plain text template, no PDF)
+  NXC_CANCELLATION_TEMPLATE_ID: z.string().default(""),
+  NXC_CANCELLATION_LANG: z.string().default("en_US"),
 
   RAZORPAY_KEY_ID: z.string().min(1, "RAZORPAY_KEY_ID is required"),
   RAZORPAY_KEY_SECRET: z.string().min(1, "RAZORPAY_KEY_SECRET is required"),

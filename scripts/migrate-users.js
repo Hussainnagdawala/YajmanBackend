@@ -399,7 +399,21 @@ async function main() {
   // ─── Commit path — only runs with --commit ────────────────────────────
 
   const { Client } = require("pg");
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  // Match src/config/database.ts — DigitalOcean managed Postgres presents a
+  // chain Node's default CA store rejects as "self-signed certificate in
+  // certificate chain" when sslmode=require is treated as verify-full.
+  const databaseUrl = new URL(process.env.DATABASE_URL);
+  const sslMode = databaseUrl.searchParams.get("sslmode")?.toLowerCase();
+  databaseUrl.search = ""; // configure SSL explicitly (same as src/config/database.ts)
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  let useSsl = !localHosts.has(databaseUrl.hostname);
+  if (sslMode === "disable" || sslMode === "false") useSsl = false;
+  else if (sslMode === "require" || sslMode === "verify-full" || sslMode === "verify-ca") useSsl = true;
+
+  const client = new Client({
+    connectionString: databaseUrl.toString(),
+    ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+  });
   await client.connect();
 
   const BATCH_SIZE = 500;

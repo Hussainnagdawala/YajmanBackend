@@ -8,12 +8,14 @@ import {
   findInvoiceByOrderId,
   createInvoice,
   updateInvoicePdfUrl,
+  replaceInvoice,
 } from "../queries/invoice.queries";
 import { findBookingDetail } from "../queries/booking.queries";
 import { getSettingsByKeys } from "../queries/settings.queries";
 import { getSignedDownloadUrl, extractSpacesKey, spacesObjectExists } from "../utils/spaces";
 import { categoryRequiresBookingTime } from "../utils/booking-time";
 import { renderInvoicePdf } from "./invoice-pdf.renderer";
+import { INVOICE_COMPANY } from "../constants/invoice-company";
 import type { InvoiceBranding, InvoiceData } from "./invoice.types";
 
 export type { InvoiceData, InvoiceBranding } from "./invoice.types";
@@ -50,16 +52,20 @@ export const loadInvoiceBranding = async (): Promise<InvoiceBranding> => {
   };
 };
 
+/** Today in India as YYYY-MM-DD (process TZ is UTC). */
+const istDate = (): string => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+/** e.g. YJM0920260057 — prefix + MM + YYYY + yearly sequence. */
 export const generateInvoiceNumber = async (): Promise<string> => {
   const result = await pool.query<{ count: number }>(countInvoicesThisYear);
   const seq = result.rows[0].count + 1;
-  const year = new Date().getFullYear();
-  return `INV-${year}-${String(seq).padStart(4, "0")}`;
+  const [year, month] = istDate().split("-");
+  return `${INVOICE_COMPANY.invoicePrefix}${month}${year}${String(seq).padStart(4, "0")}`;
 };
 
 export const generateInvoicePdf = async (data: Omit<InvoiceData, "branding" | "issued_date">): Promise<Buffer> => {
   const branding = await loadInvoiceBranding();
-  const issued_date = new Date().toISOString().slice(0, 10);
+  const issued_date = istDate();
   return renderInvoicePdf({ ...data, branding, issued_date });
 };
 
@@ -249,6 +255,36 @@ export const ensureOrderInvoice = async (orderId: string): Promise<EnsuredOrderI
   const pdfBuffer = await generateInvoicePdf(invoiceData);
   const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
   await pool.query(createInvoice, [order.id, invoiceNumber, publicPdfUrl, JSON.stringify(invoiceData)]);
+  const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
+
+  return {
+    invoice_number: invoiceNumber,
+    public_pdf_url: publicPdfUrl,
+    download_pdf_url: downloadPdfUrl,
+    order,
+    created: true,
+  };
+};
+
+/**
+ * Re-issues an order's invoice with a fresh invoice number and the current PDF
+ * layout. Updates the existing invoice row in place (creates one if missing).
+ */
+export const regenerateOrderInvoice = async (orderId: string): Promise<EnsuredOrderInvoice> => {
+  const existing = await pool.query(findInvoiceByOrderId, [orderId]);
+  if (!existing.rows[0]) return ensureOrderInvoice(orderId);
+
+  const orderResult = await pool.query(findBookingDetail, [orderId]);
+  const order = orderResult.rows[0];
+  if (!order) {
+    throw new Error(`Order not found for invoice: ${orderId}`);
+  }
+
+  const invoiceNumber = await generateInvoiceNumber();
+  const invoiceData = buildInvoiceSnapshot(order, invoiceNumber);
+  const pdfBuffer = await generateInvoicePdf(invoiceData);
+  const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
+  await pool.query(replaceInvoice, [existing.rows[0].id, invoiceNumber, publicPdfUrl, JSON.stringify(invoiceData)]);
   const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
 
   return {

@@ -26,3 +26,9 @@ export const countInvoicesAdmin = (whereClauses: string[]) => `
   SELECT COUNT(*)::int AS count FROM invoices i
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
 `;
+
+export const replaceInvoice = `
+  UPDATE invoices SET invoice_number = $2, pdf_url = $3, invoice_data = $4, generated_at = NOW()
+  WHERE id = $1
+  RETURNING *
+`;

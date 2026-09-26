@@ -87,7 +87,9 @@ export const markOverdueAlertSent = `
 
 // ─── Admin: order management ─────────────────────────────────
 
-export const listOrdersAdmin = (whereClauses: string[], limitIdx: number, offsetIdx: number) => `
+// orderByClause must come from ORDER_SORT_COLUMNS in order.controller.ts (an
+// allowlist) — never pass raw user input, this is interpolated directly.
+export const listOrdersAdmin = (whereClauses: string[], limitIdx: number, offsetIdx: number, orderByClause = "o.created_at DESC") => `
   SELECT o.*, s.title AS service_title, s.slug AS service_slug, c.requires_booking_time,
     (
       SELECT pa.status FROM pandit_assignments pa
@@ -103,7 +105,7 @@ export const listOrdersAdmin = (whereClauses: string[], limitIdx: number, offset
   JOIN services s ON s.id = o.service_id
   JOIN categories c ON c.id = s.category_id
   ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
-  ORDER BY o.created_at DESC
+  ORDER BY ${orderByClause}
   LIMIT $${limitIdx} OFFSET $${offsetIdx}
 `;
 

@@ -10,4 +10,3 @@ uploads/*
 !uploads/.gitkeep
 dump/
 .zip
-dump-yamprod-202608061629.sql

@@ -21,6 +21,15 @@ import {
   getOrderActivity as getOrderActivityQuery,
 } from "../../queries/order.queries";
 
+// Allowlist of frontend sort keys → real columns. Never interpolate q.sort
+// directly into SQL — this is the only thing standing between it and injection.
+const ORDER_SORT_COLUMNS: Record<string, string> = {
+  booking_datetime: "o.booking_datetime",
+  total_amount: "o.total_amount",
+  status: "o.status",
+  created_at: "o.created_at",
+};
+
 export const listOrdersAdmin = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const q = req.query as unknown as {
@@ -30,6 +39,8 @@ export const listOrdersAdmin = async (req: Request, res: Response, next: NextFun
       search?: string;
       page: number;
       limit: number;
+      sort?: string;
+      direction?: string;
     };
     const { limit: safeLimit, offset, meta } = paginate(q.page, q.limit);
 
@@ -52,8 +63,13 @@ export const listOrdersAdmin = async (req: Request, res: Response, next: NextFun
       whereClauses.push(`(o.order_number ILIKE $${values.length} OR o.customer_name ILIKE $${values.length} OR o.customer_phone ILIKE $${values.length})`);
     }
 
+    const sortColumn = q.sort ? ORDER_SORT_COLUMNS[q.sort] : undefined;
+    const orderByClause = sortColumn
+      ? `${sortColumn} ${q.direction === "desc" ? "DESC" : "ASC"}`
+      : undefined;
+
     const [rows, count] = await Promise.all([
-      pool.query(listOrdersAdminQuery(whereClauses, values.length + 1, values.length + 2), [...values, safeLimit, offset]),
+      pool.query(listOrdersAdminQuery(whereClauses, values.length + 1, values.length + 2, orderByClause), [...values, safeLimit, offset]),
       pool.query<{ count: number }>(countOrdersAdmin(whereClauses), values),
     ]);
 
