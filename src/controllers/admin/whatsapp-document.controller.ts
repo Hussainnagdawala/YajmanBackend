@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { success } from "../../utils/response";
 import { AppError } from "../../utils/errors";
-import { pdfDisplayName, sendUploadedPdfOnWhatsApp } from "../../services/whatsapp-document.service";
+import { pdfDisplayName, sendPublicPdfOnWhatsApp } from "../../services/whatsapp-document.service";
 
 export const sendWhatsAppDocument = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -32,7 +32,7 @@ export const sendWhatsAppDocument = async (req: Request, res: Response, next: Ne
     }
 
     const { phone_number } = req.body as { phone_number: string };
-    const data = await sendUploadedPdfOnWhatsApp({
+    const data = await sendPublicPdfOnWhatsApp({
       to: phone_number,
       fileUrl: file.location,
       fileName: pdfDisplayName(file.originalname),

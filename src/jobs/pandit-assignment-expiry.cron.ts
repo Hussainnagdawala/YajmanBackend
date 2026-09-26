@@ -4,6 +4,7 @@ import { logger } from "../config/logger";
 import { expireStaleAssignments } from "../queries/pandit.queries";
 import { listAdminUserIds } from "../queries/user.queries";
 import { createNotification } from "../services/notification.service";
+import { notifyPanditUnavailable } from "../services/order-notification.service";
 
 let started = false;
 
@@ -16,13 +17,22 @@ export const startPanditAssignmentExpiryCron = (): void => {
   // existing enum value) was never actually set anywhere. This is the fix.
   cron.schedule("*/15 * * * *", async () => {
     try {
-      const expired = await pool.query<{ id: string; order_id: string; pandit_id: string; order_number: string }>(
-        expireStaleAssignments
-      );
+      const expired = await pool.query<{
+        id: string;
+        order_id: string;
+        pandit_id: string;
+        order_number: string;
+        user_id: string;
+      }>(expireStaleAssignments);
       if (expired.rows.length === 0) return;
 
       const admins = await pool.query<{ id: string }>(listAdminUserIds);
       for (const row of expired.rows) {
+        void notifyPanditUnavailable({
+          id: row.order_id,
+          user_id: row.user_id,
+          order_number: row.order_number,
+        });
         for (const admin of admins.rows) {
           await createNotification(
             admin.id,

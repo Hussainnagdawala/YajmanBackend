@@ -47,6 +47,23 @@ export const completeOrder = `
   UPDATE orders SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *
 `;
 
+// Completed bookings ready for a review nudge: finished at least 24h ago,
+// no review yet, nudge not sent. Used by booking-followup.cron.ts.
+export const findCompletedOrdersNeedingReviewNudge = `
+  SELECT o.id, o.user_id, o.order_number, s.title AS service_title
+  FROM orders o
+  JOIN services s ON s.id = o.service_id
+  WHERE o.status = 'completed'
+    AND o.completed_at IS NOT NULL
+    AND o.completed_at <= NOW() - INTERVAL '24 hours'
+    AND o.review_nudge_sent_at IS NULL
+    AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = o.id)
+`;
+
+export const markReviewNudgeSent = `
+  UPDATE orders SET review_nudge_sent_at = NOW() WHERE id = $1
+`;
+
 // ─── Follow-up alerts (booking-followup.cron.ts) ───────────────
 
 // Orders whose category needs a pandit, still sitting 'confirmed' (nobody has

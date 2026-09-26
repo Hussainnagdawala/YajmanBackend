@@ -84,6 +84,53 @@ export const notifyPanditAssigned = (order: OrderNotificationTarget): Promise<vo
     "pandit_assigned"
   );
 
+export const notifyPanditAccepted = (order: OrderNotificationTarget): Promise<void> =>
+  notify(
+    order,
+    "Pandit confirmed",
+    `Your pandit has accepted booking ${order.order_number} and will be there on the scheduled date.`,
+    "pandit_assigned"
+  );
+
+/** Pandit rejected, withdrew, or assignment expired — another pandit will be found. */
+export const notifyPanditUnavailable = (order: OrderNotificationTarget): Promise<void> =>
+  notify(
+    order,
+    "Finding another pandit",
+    `The assigned pandit is no longer available for booking ${order.order_number}. We're assigning someone else shortly.`,
+    "pandit_assigned"
+  );
+
+export const notifyPanditReassigned = (order: OrderNotificationTarget): Promise<void> =>
+  notify(
+    order,
+    "New pandit assigned",
+    `A new pandit has been assigned to booking ${order.order_number} and will confirm shortly.`,
+    "pandit_assigned"
+  );
+
+export const notifyInvoiceReady = (order: OrderNotificationTarget): Promise<void> =>
+  notify(
+    order,
+    "Invoice ready",
+    `Your invoice for booking ${order.order_number} is ready. You can download it from your booking details.`,
+    "payment"
+  );
+
+export const notifyReviewNudge = (
+  order: OrderNotificationTarget,
+  serviceTitle: string
+): Promise<void> =>
+  createNotification(
+    order.user_id,
+    "How was your experience?",
+    `Please rate your "${serviceTitle}" booking (${order.order_number}). Your feedback helps other devotees.`,
+    "review",
+    "order",
+    order.id,
+    bookingLink(order.id)
+  );
+
 // Admin status transitions the customer should hear about. Statuses not in this
 // map (e.g. 'disputed') deliberately produce no customer notification.
 const ADMIN_STATUS_MESSAGES: Record<string, { title: string; body: (n: string) => string }> = {

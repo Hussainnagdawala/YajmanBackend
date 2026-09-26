@@ -4,7 +4,10 @@ import { success } from "../../utils/response";
 import { AppError } from "../../utils/errors";
 import { paginate } from "../../utils/pagination";
 import { createNotification } from "../../services/notification.service";
-import { notifyPanditAssigned } from "../../services/order-notification.service";
+import {
+  notifyPanditAssigned,
+  notifyPanditReassigned,
+} from "../../services/order-notification.service";
 import { assertPanditCapacityAvailable } from "../../services/pandit-availability.service";
 import { updateOrderStatus } from "../../queries/order.queries";
 import {
@@ -131,7 +134,7 @@ export const reassignPandit = async (req: Request, res: Response, next: NextFunc
       "order",
       order.id
     );
-    void notifyPanditAssigned(order);
+    void notifyPanditReassigned(order);
 
     return success(res, updated, "Pandit reassigned");
   } catch (err) {

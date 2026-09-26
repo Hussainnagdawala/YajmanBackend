@@ -839,6 +839,7 @@ CREATE TABLE orders (
     cancellation_reason TEXT,
     cancelled_by UUID REFERENCES users(id),
     completed_at TIMESTAMP WITH TIME ZONE,
+    review_nudge_sent_at TIMESTAMP WITH TIME ZONE,
 
     -- Notes
     special_instructions TEXT,

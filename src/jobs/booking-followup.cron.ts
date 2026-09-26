@@ -11,8 +11,11 @@ import {
   markUnassignedAlertSent,
   findOverdueUnresolvedBookings,
   markOverdueAlertSent,
+  findCompletedOrdersNeedingReviewNudge,
+  markReviewNudgeSent,
 } from "../queries/order.queries";
 import { createNotification } from "../services/notification.service";
+import { notifyReviewNudge } from "../services/order-notification.service";
 
 let started = false;
 
@@ -23,7 +26,7 @@ const notifyAllAdmins = async (title: string, body: string, referenceId: string)
   }
 };
 
-// Three follow-up signals nothing else in the system generated:
+// Four follow-up signals nothing else in the system generated:
 //  1. Pending assignment nearing its 48h window — nudge the pandit before it
 //     silently expires (pandit-assignment-expiry.cron.ts only notifies admin
 //     AFTER expiry — this fires first, while the pandit can still act).
@@ -33,11 +36,12 @@ const notifyAllAdmins = async (title: string, body: string, referenceId: string)
 //     never cancelled) — order used to just sit there invisibly forever
 //     (see the STATUS_GROUPS comment in booking.queries.ts); this is the
 //     safety net.
+//  4. Completed booking with no review after 24h — ask the customer for
+//     feedback once (skipped if a review already exists).
 // Each check has its own *_sent_at flag so it fires exactly once, same
 // pattern as reminder_24h_sent_at / reminder_2h_sent_at.
-// Three independent schedules, not one — a failure in any single check
-// (e.g. a bad row) logs and stops just that check for this tick instead of
-// blocking the other two.
+// Independent schedules — a failure in any single check logs and stops just
+// that check for this tick instead of blocking the others.
 export const startBookingFollowupCron = (): void => {
   if (started) return;
   started = true;
@@ -63,6 +67,14 @@ export const startBookingFollowupCron = (): void => {
       await alertAdminsOverdueUnresolved();
     } catch (err) {
       logger.error("Overdue-booking alert check failed", { err });
+    }
+  });
+
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      await nudgeCustomersForReviews();
+    } catch (err) {
+      logger.error("Review-nudge check failed", { err });
     }
   });
 
@@ -124,4 +136,23 @@ const alertAdminsOverdueUnresolved = async (): Promise<void> => {
     await pool.query(markOverdueAlertSent, [row.id]);
   }
   logger.info("Alerted admins about overdue unresolved bookings", { count: rows.length });
+};
+
+const nudgeCustomersForReviews = async (): Promise<void> => {
+  const { rows } = await pool.query<{
+    id: string;
+    user_id: string;
+    order_number: string;
+    service_title: string;
+  }>(findCompletedOrdersNeedingReviewNudge);
+  if (rows.length === 0) return;
+
+  for (const row of rows) {
+    await notifyReviewNudge(
+      { id: row.id, user_id: row.user_id, order_number: row.order_number },
+      row.service_title
+    );
+    await pool.query(markReviewNudgeSent, [row.id]);
+  }
+  logger.info("Sent review nudges", { count: rows.length });
 };

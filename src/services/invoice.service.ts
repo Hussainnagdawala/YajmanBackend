@@ -1,10 +1,11 @@
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+import type { PoolClient } from "pg";
 import { s3Client } from "../config/s3";
 import { env } from "../config/env";
 import { pool } from "../config/database";
 import { logger } from "../config/logger";
 import {
-  countInvoicesThisYear,
+  nextInvoiceSequenceForPrefix,
   findInvoiceByOrderId,
   createInvoice,
   updateInvoicePdfUrl,
@@ -14,9 +15,11 @@ import { findBookingDetail } from "../queries/booking.queries";
 import { getSettingsByKeys } from "../queries/settings.queries";
 import { getSignedDownloadUrl, extractSpacesKey, spacesObjectExists } from "../utils/spaces";
 import { categoryRequiresBookingTime } from "../utils/booking-time";
+import { AppError } from "../utils/errors";
 import { renderInvoicePdf } from "./invoice-pdf.renderer";
 import { INVOICE_COMPANY } from "../constants/invoice-company";
 import type { InvoiceBranding, InvoiceData } from "./invoice.types";
+import { notifyInvoiceReady } from "./order-notification.service";
 
 export type { InvoiceData, InvoiceBranding } from "./invoice.types";
 
@@ -55,12 +58,21 @@ export const loadInvoiceBranding = async (): Promise<InvoiceBranding> => {
 /** Today in India as YYYY-MM-DD (process TZ is UTC). */
 const istDate = (): string => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
-/** e.g. YJM0920260057 — prefix + MM + YYYY + yearly sequence. */
-export const generateInvoiceNumber = async (): Promise<string> => {
-  const result = await pool.query<{ count: number }>(countInvoicesThisYear);
-  const seq = result.rows[0].count + 1;
+/** e.g. YJM0920260057 — prefix + MM + YYYY + highest existing suffix + 1. */
+const generateInvoiceNumber = async (client: PoolClient): Promise<string> => {
   const [year, month] = istDate().split("-");
-  return `${INVOICE_COMPANY.invoicePrefix}${month}${year}${String(seq).padStart(4, "0")}`;
+  const prefix = `${INVOICE_COMPANY.invoicePrefix}${month}${year}`;
+
+  // Keep this transaction-scoped lock until the invoice row is written.
+  // It prevents concurrent captures from selecting the same numeric suffix.
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+    `invoice-number:${prefix}`,
+  ]);
+  const result = await client.query<{ sequence: number }>(
+    nextInvoiceSequenceForPrefix,
+    [prefix]
+  );
+  return `${prefix}${String(result.rows[0].sequence).padStart(4, "0")}`;
 };
 
 export const generateInvoicePdf = async (data: Omit<InvoiceData, "branding" | "issued_date">): Promise<Buffer> => {
@@ -157,6 +169,32 @@ export const ensureInvoicePdfUrl = async (
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BookingInvoiceOrder = any;
 
+const INVOICE_ELIGIBLE_ORDER_STATUSES = new Set([
+  "confirmed",
+  "pandit_assigned",
+  "in_progress",
+  "completed",
+]);
+
+/**
+ * New/reissued invoices are legal only after a successful captured payment.
+ * Existing invoices are intentionally returned before this check so a tax
+ * invoice issued at capture remains downloadable after a later refund.
+ */
+const assertInvoiceCanBeGenerated = (order: BookingInvoiceOrder): void => {
+  const paymentStatus = order.payment?.status;
+  if (
+    paymentStatus !== "captured" ||
+    !INVOICE_ELIGIBLE_ORDER_STATUSES.has(order.status)
+  ) {
+    throw new AppError(
+      "INVOICE_NOT_AVAILABLE",
+      "Invoice is available only after payment has been captured successfully",
+      409
+    );
+  }
+};
+
 const buildInvoiceSnapshot = (
   order: BookingInvoiceOrder,
   invoiceNumber: string
@@ -219,6 +257,27 @@ export type EnsuredOrderInvoice = {
   created: boolean;
 };
 
+const resolveExistingOrderInvoice = async (
+  invoice: any,
+  order: BookingInvoiceOrder
+): Promise<EnsuredOrderInvoice> => {
+  const { pdfUrl, correctedUrl } = await ensureInvoicePdfUrl(
+    invoice.pdf_url,
+    invoice.invoice_number,
+    invoice.invoice_data
+  );
+  if (correctedUrl) {
+    await pool.query(updateInvoicePdfUrl, [invoice.id, correctedUrl]);
+  }
+  return {
+    invoice_number: invoice.invoice_number,
+    public_pdf_url: correctedUrl ?? invoice.pdf_url,
+    download_pdf_url: pdfUrl,
+    order,
+    created: false,
+  };
+};
+
 /**
  * Idempotent: returns existing invoice or creates PDF + row.
  * Loads full booking detail (service, payment, addons) by order id.
@@ -232,38 +291,58 @@ export const ensureOrderInvoice = async (orderId: string): Promise<EnsuredOrderI
 
   const existing = await pool.query(findInvoiceByOrderId, [order.id]);
   if (existing.rows[0]) {
-    const invoice = existing.rows[0];
-    const { pdfUrl, correctedUrl } = await ensureInvoicePdfUrl(
-      invoice.pdf_url,
-      invoice.invoice_number,
-      invoice.invoice_data
-    );
-    if (correctedUrl) {
-      await pool.query(updateInvoicePdfUrl, [invoice.id, correctedUrl]);
-    }
-    return {
-      invoice_number: invoice.invoice_number,
-      public_pdf_url: correctedUrl ?? invoice.pdf_url,
-      download_pdf_url: pdfUrl,
-      order,
-      created: false,
-    };
+    return resolveExistingOrderInvoice(existing.rows[0], order);
   }
 
-  const invoiceNumber = await generateInvoiceNumber();
-  const invoiceData = buildInvoiceSnapshot(order, invoiceNumber);
-  const pdfBuffer = await generateInvoicePdf(invoiceData);
-  const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
-  await pool.query(createInvoice, [order.id, invoiceNumber, publicPdfUrl, JSON.stringify(invoiceData)]);
-  const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
+  assertInvoiceCanBeGenerated(order);
 
-  return {
-    invoice_number: invoiceNumber,
-    public_pdf_url: publicPdfUrl,
-    download_pdf_url: downloadPdfUrl,
-    order,
-    created: true,
-  };
+  const client = await pool.connect();
+  let clientReleased = false;
+  try {
+    await client.query("BEGIN");
+    const invoiceNumber = await generateInvoiceNumber(client);
+
+    // A concurrent payment callback/download may have created this order's
+    // invoice while we waited for the number lock.
+    const racedInvoice = await client.query(findInvoiceByOrderId, [order.id]);
+    if (racedInvoice.rows[0]) {
+      await client.query("COMMIT");
+      client.release();
+      clientReleased = true;
+      return resolveExistingOrderInvoice(racedInvoice.rows[0], order);
+    }
+
+    const invoiceData = buildInvoiceSnapshot(order, invoiceNumber);
+    const pdfBuffer = await generateInvoicePdf(invoiceData);
+    const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
+    await client.query(createInvoice, [
+      order.id,
+      invoiceNumber,
+      publicPdfUrl,
+      JSON.stringify(invoiceData),
+    ]);
+    await client.query("COMMIT");
+    const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
+
+    void notifyInvoiceReady({
+      id: order.id,
+      user_id: order.user_id,
+      order_number: order.order_number,
+    });
+
+    return {
+      invoice_number: invoiceNumber,
+      public_pdf_url: publicPdfUrl,
+      download_pdf_url: downloadPdfUrl,
+      order,
+      created: true,
+    };
+  } catch (err) {
+    if (!clientReleased) await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    if (!clientReleased) client.release();
+  }
 };
 
 /**
@@ -280,18 +359,35 @@ export const regenerateOrderInvoice = async (orderId: string): Promise<EnsuredOr
     throw new Error(`Order not found for invoice: ${orderId}`);
   }
 
-  const invoiceNumber = await generateInvoiceNumber();
-  const invoiceData = buildInvoiceSnapshot(order, invoiceNumber);
-  const pdfBuffer = await generateInvoicePdf(invoiceData);
-  const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
-  await pool.query(replaceInvoice, [existing.rows[0].id, invoiceNumber, publicPdfUrl, JSON.stringify(invoiceData)]);
-  const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
+  assertInvoiceCanBeGenerated(order);
 
-  return {
-    invoice_number: invoiceNumber,
-    public_pdf_url: publicPdfUrl,
-    download_pdf_url: downloadPdfUrl,
-    order,
-    created: true,
-  };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const invoiceNumber = await generateInvoiceNumber(client);
+    const invoiceData = buildInvoiceSnapshot(order, invoiceNumber);
+    const pdfBuffer = await generateInvoicePdf(invoiceData);
+    const publicPdfUrl = await uploadInvoicePdf(pdfBuffer, invoiceNumber);
+    await client.query(replaceInvoice, [
+      existing.rows[0].id,
+      invoiceNumber,
+      publicPdfUrl,
+      JSON.stringify(invoiceData),
+    ]);
+    await client.query("COMMIT");
+    const downloadPdfUrl = (await resolveInvoicePdfUrl(publicPdfUrl)) ?? publicPdfUrl;
+
+    return {
+      invoice_number: invoiceNumber,
+      public_pdf_url: publicPdfUrl,
+      download_pdf_url: downloadPdfUrl,
+      order,
+      created: true,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 };

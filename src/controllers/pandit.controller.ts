@@ -5,6 +5,10 @@ import { AppError } from "../utils/errors";
 import { paginate } from "../utils/pagination";
 import { hoursUntil } from "../utils/date";
 import { createNotification } from "../services/notification.service";
+import {
+  notifyPanditAccepted,
+  notifyPanditUnavailable,
+} from "../services/order-notification.service";
 import { recalculatePanditStats } from "../services/stats.service";
 import { assertPanditCapacityAvailable } from "../services/pandit-availability.service";
 import { findUserById, listAdminUserIds } from "../queries/user.queries";
@@ -171,9 +175,7 @@ export const acceptAssignment = async (req: Request, res: Response, next: NextFu
 
     const updated = await pool.query(updateAssignmentAccept, [req.params.id, req.body.notes ?? null]);
 
-    await createNotification(
-      order.user_id, "Pandit assigned", "A pandit has accepted your booking.", "booking_update", "order", order.id
-    );
+    void notifyPanditAccepted(order);
     await notifyAllAdmins("Assignment accepted", `Pandit accepted assignment for order ${order.order_number}.`, order.id);
 
     return success(res, updated.rows[0], "Assignment accepted");
@@ -195,6 +197,7 @@ export const rejectAssignment = async (req: Request, res: Response, next: NextFu
 
     const orderResult = await pool.query(findOrderForAssignment, [assignment.order_id]);
     const order = orderResult.rows[0];
+    void notifyPanditUnavailable(order);
     await notifyAllAdmins(
       "Assignment rejected — reassignment needed",
       `Pandit rejected assignment for order ${order.order_number}: ${req.body.reason}`,
@@ -238,6 +241,7 @@ export const withdrawAssignment = async (req: Request, res: Response, next: Next
     const updated = await pool.query(updateAssignmentReject, [req.params.id, reason]);
 
     const urgent = hoursUntil(new Date(order.booking_datetime)) < 24;
+    void notifyPanditUnavailable(order);
     await notifyAllAdmins(
       urgent ? "URGENT: Pandit withdrew — booking is within 24 hours" : "Pandit withdrew — reassignment needed",
       `Pandit withdrew from order ${order.order_number} after accepting: ${req.body.reason}`,

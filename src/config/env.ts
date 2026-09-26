@@ -50,10 +50,7 @@ const envSchema = z.object({
   NXC_OTP_LANG: z.string().default("en_us"),
   // set to "false" if the template's button has no dynamic URL variable
   NXC_OTP_HAS_BUTTON: z.string().default("true").transform((v) => v !== "false"),
-  // Invoice / booking confirmation (NXC "Variable With PDF" template)
-  NXC_INVOICE_TEMPLATE_ID: z.string().default("complete_booking"),
-  NXC_INVOICE_LANG: z.string().default("en_US"),
-  // send-document API: Utility template booking_invoice (en_US, DOCUMENT header, no body variables)
+  // Invoice and send-document API: Utility template with DOCUMENT header and no body variables.
   NXC_DOCUMENT_TEMPLATE_ID: z.string().default("booking_invoice"),
   NXC_DOCUMENT_LANG: z.string().default("en_US"),
   // Booking cancellation / refund status (plain text template, no PDF)

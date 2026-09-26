@@ -4,14 +4,14 @@ import { logger } from "../config/logger";
 import { AppError } from "../utils/errors";
 import { sendNxcTemplateWithPdf } from "./whatsapp.service";
 
-export type SendUploadedPdfResult = {
+export type SendPublicPdfResult = {
   phone_number: string;
   file_name: string;
   task_id: string | number | null;
   delivery_status: string;
 };
 
-/** Display name sent as NXC `file_name` (same field Final Booking uses). */
+/** Display name sent as NXC `file_name`. */
 export const pdfDisplayName = (originalName: string | undefined): string => {
   const base = path.basename(originalName || "document.pdf").replace(/[/\\]/g, "").trim() || "document.pdf";
   const withExt = base.toLowerCase().endsWith(".pdf") ? base : `${base}.pdf`;
@@ -19,15 +19,15 @@ export const pdfDisplayName = (originalName: string | undefined): string => {
 };
 
 /**
- * Send an already-uploaded public PDF with the Utility template `booking_invoice`
- * (en_US, DOCUMENT header, no body variables). Same NXC JSON call as Final Booking,
- * but Final Booking keeps the marketing template `complete_booking`.
+ * Send any publicly reachable PDF with the Utility template `booking_invoice`
+ * (en_US, DOCUMENT header, no body variables). Used by both the admin upload
+ * endpoint and automatic invoice delivery after successful payment.
  */
-export const sendUploadedPdfOnWhatsApp = async (input: {
+export const sendPublicPdfOnWhatsApp = async (input: {
   to: string;
   fileUrl: string;
   fileName: string;
-}): Promise<SendUploadedPdfResult> => {
+}): Promise<SendPublicPdfResult> => {
   if (!env.NXC_DOCUMENT_TEMPLATE_ID.trim()) {
     throw new AppError("WHATSAPP_NOT_CONFIGURED", "WhatsApp document template is not configured", 503);
   }

@@ -85,7 +85,10 @@ router.get("/:id", bookingController.getBookingDetail);
  * /bookings/{id}/invoice:
  *   get:
  *     tags: [Bookings]
- *     summary: Get (generating on first request) the PDF invoice for a booking
+ *     summary: Get the PDF invoice for a successfully paid booking
+ *     description: >
+ *       Returns an existing invoice, or generates one only when the latest
+ *       payment is captured and the order is in a paid active/completed state.
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -127,6 +130,8 @@ router.get("/:id", bookingController.getBookingDetail);
  *         $ref: '#/components/responses/Forbidden'
  *       404:
  *         $ref: '#/components/responses/NotFound'
+ *       409:
+ *         description: Payment has not been captured successfully, so no invoice was generated
  */
 router.get("/:id/invoice", invoiceController.getBookingInvoice);
 

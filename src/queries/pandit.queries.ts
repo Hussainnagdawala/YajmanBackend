@@ -170,7 +170,7 @@ export const expireStaleAssignments = `
   UPDATE pandit_assignments pa SET status = 'expired', updated_at = NOW()
   FROM orders o
   WHERE pa.order_id = o.id AND pa.status = 'pending' AND pa.respond_by < NOW()
-  RETURNING pa.id, pa.order_id, pa.pandit_id, o.order_number
+  RETURNING pa.id, pa.order_id, pa.pandit_id, o.order_number, o.user_id
 `;
 
 // Pending assignments whose 48h response window closes within 12h and the

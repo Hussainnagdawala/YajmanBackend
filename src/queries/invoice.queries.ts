@@ -1,7 +1,17 @@
 export const findInvoiceByOrderId = `SELECT * FROM invoices WHERE order_id = $1`;
 
-export const countInvoicesThisYear = `
-  SELECT COUNT(*)::int AS count FROM invoices WHERE EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())
+export const nextInvoiceSequenceForPrefix = `
+  SELECT COALESCE(
+    MAX(
+      CASE
+        WHEN SUBSTRING(invoice_number FROM LENGTH($1) + 1) ~ '^[0-9]+$'
+        THEN SUBSTRING(invoice_number FROM LENGTH($1) + 1)::int
+      END
+    ),
+    0
+  ) + 1 AS sequence
+  FROM invoices
+  WHERE invoice_number LIKE $1 || '%'
 `;
 
 export const createInvoice = `
