@@ -150,6 +150,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       booking_time
     );
 
+    
     const bookingDateTime = computeBookingDateTime(booking_date, resolvedBookingTime, service.advance_booking_days);
     await assertNoDuplicateBooking(userId, service_id, booking_date);
 
